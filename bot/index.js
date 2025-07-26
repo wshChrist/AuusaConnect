@@ -29,6 +29,10 @@ app.post('/match', (req, res) => {
         lines.push(
           `${p.name} - ${p.goals} buts, ${p.assists} passes, ${p.shots} tirs, ${p.saves} arrêts, ${p.score} pts`
         );
+        const rotation = p.rotationQuality >= 0.6 ? 'respecte la rotation' : 'ne respecte pas la rotation';
+        lines.push(
+          `\u2514 Boosts pris: ${p.boostPickups} (gaspillés: ${p.wastedBoostPickups}), fréquence ${p.boostFrequency.toFixed(2)}/s, ${rotation}`
+        );
       }
     }
     channel.send(lines.join('\n'));
