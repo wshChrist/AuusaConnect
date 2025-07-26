@@ -17,8 +17,18 @@ app.post('/match', (req, res) => {
   res.sendStatus(200);
 });
 
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log('Bot prêt');
+
+  // Enregistre la commande slash /setchannel si elle n'existe pas
+  try {
+    await client.application.commands.create({
+      name: 'setchannel',
+      description: 'Choisir le salon où publier les scores'
+    });
+  } catch (err) {
+    console.error('Erreur lors de la création des commandes :', err);
+  }
 });
 
 client.on('interactionCreate', async interaction => {
