@@ -18,3 +18,7 @@ Il transmet notamment :
 - la liste des joueurs ayant marqué ;
 - le nom du MVP ;
 - pour chaque joueur, son nombre de buts, d'arrêts et son score.
+- ainsi que des statistiques sur l'utilisation du boost :
+  - fréquence de prise de boost ;
+  - nombre de boosts gaspillés (pris alors que la jauge était presque pleine) ;
+  - un indicateur simple de la rotation basé sur la proportion de petits pads pris.
