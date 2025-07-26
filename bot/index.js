@@ -19,6 +19,11 @@ app.post('/match', (req, res) => {
       lines.push('Scores joueurs :');
       for (const p of players) {
         lines.push(`${p.name} - ${p.goals} buts, ${p.saves} arrêts, ${p.score} pts`);
+        if (p.boostPickups !== undefined) {
+          lines.push(`\tRotations : ${(p.rotationQuality * 100).toFixed(0)}% petits pads`);
+          lines.push(`\tFréquence boost : ${p.boostFrequency.toFixed(2)}/s`);
+          lines.push(`\tBoosts gaspillés : ${p.wastedBoostPickups}`);
+        }
       }
     }
     channel.send(lines.join('\n'));

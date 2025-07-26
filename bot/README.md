@@ -24,6 +24,4 @@ Au premier lancement, le bot enregistre automatiquement la commande slash
 `/setchannel`. Utilisez-la dans le salon souhaité pour que les scores y soient
 publiés.
 
-Le bot reçoit désormais des informations détaillées sur la partie (buteurs, MVP,
-scores individuels et arrêts) et les présente sous forme de message formaté dans
-le salon configuré.
+Le bot reçoit désormais des informations détaillées sur la partie (buteurs, MVP, scores individuels, utilisation du boost) et les présente sous forme de message formaté dans le salon configuré. Pour chaque joueur sont indiquées la fréquence de prise de boost, la proportion de petits pads ramassés et le nombre de boosts gaspillés.
