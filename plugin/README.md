@@ -17,8 +17,5 @@ Il transmet notamment :
 - le score global des équipes ;
 - la liste des joueurs ayant marqué ;
 - le nom du MVP ;
-- pour chaque joueur, son nombre de buts, d'arrêts et son score.
-- ainsi que des statistiques sur l'utilisation du boost :
-  - fréquence de prise de boost ;
-  - nombre de boosts gaspillés (pris alors que la jauge était presque pleine) ;
-  - un indicateur simple de la rotation basé sur la proportion de petits pads pris.
+- pour chaque joueur, son nombre de buts, de passes décisives, de tirs cadrés, d'arrêts et son score.
+- les noms exacts des équipes telles qu'affichées en jeu.
