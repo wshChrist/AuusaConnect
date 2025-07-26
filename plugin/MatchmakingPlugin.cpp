@@ -37,8 +37,14 @@ void MatchmakingPlugin::OnGameEnd()
     if (!sw)
         return;
 
-    int scoreBlue = sw.GetTeams().Get(0).GetScore();
-    int scoreOrange = sw.GetTeams().Get(1).GetScore();
+    TeamWrapper blueTeam = sw.GetTeams().Get(0);
+    TeamWrapper orangeTeam = sw.GetTeams().Get(1);
+
+    int scoreBlue = blueTeam.GetScore();
+    int scoreOrange = orangeTeam.GetScore();
+
+    std::string blueName = blueTeam.GetTeamName().ToString();
+    std::string orangeName = orangeTeam.GetTeamName().ToString();
 
     ArrayWrapper<PriWrapper> pris = sw.GetPRIs();
     json players = json::array();
@@ -56,6 +62,8 @@ void MatchmakingPlugin::OnGameEnd()
             {"name", pri.GetPlayerName().ToString()},
             {"team", pri.GetTeamNum2()},
             {"goals", pri.GetMatchGoals()},
+            {"assists", pri.GetMatchAssists()},
+            {"shots", pri.GetMatchShots()},
             {"saves", pri.GetMatchSaves()},
             {"score", pri.GetMatchScore()}
         };
@@ -74,6 +82,8 @@ void MatchmakingPlugin::OnGameEnd()
     json payload = {
         {"scoreBlue", scoreBlue},
         {"scoreOrange", scoreOrange},
+        {"teamBlue", blueName},
+        {"teamOrange", orangeName},
         {"scorers", scorers},
         {"mvp", mvp},
         {"players", players}

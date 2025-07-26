@@ -17,4 +17,5 @@ Il transmet notamment :
 - le score global des équipes ;
 - la liste des joueurs ayant marqué ;
 - le nom du MVP ;
-- pour chaque joueur, son nombre de buts, d'arrêts et son score.
+- pour chaque joueur, son nombre de buts, de passes décisives, de tirs cadrés, d'arrêts et son score.
+- les noms exacts des équipes telles qu'affichées en jeu.
