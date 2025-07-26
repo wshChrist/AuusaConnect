@@ -55,13 +55,13 @@ void MatchmakingPlugin::OnGameEnd()
         json p = {
             {"name", pri.GetPlayerName().ToString()},
             {"team", pri.GetTeamNum2()},
-            {"goals", pri.GetGoals()},
-            {"saves", pri.GetSaves()},
+            {"goals", pri.GetMatchGoals()},
+            {"saves", pri.GetMatchSaves()},
             {"score", pri.GetMatchScore()}
         };
         players.push_back(p);
 
-        if (pri.GetGoals() > 0)
+        if (pri.GetMatchGoals() > 0)
             scorers.push_back(pri.GetPlayerName().ToString());
 
         if (pri.GetMatchScore() > bestScore)
