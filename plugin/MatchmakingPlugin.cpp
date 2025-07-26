@@ -6,6 +6,15 @@
 
 using json = nlohmann::json;
 
+struct PlayerStats
+{
+    int boostPickups = 0;
+    int wastedBoosts = 0;
+    int smallPads = 0;
+    int bigPads = 0;
+    float lastBoost = -1.f;
+};
+
 class MatchmakingPlugin : public BakkesMod::Plugin::BakkesModPlugin
 {
 public:
@@ -14,7 +23,11 @@ public:
 
 private:
     void HookEvents();
+    void OnMatchStart(ServerWrapper server);
+    void TickBoost();
     void OnGameEnd();
+
+    std::map<std::string, PlayerStats> stats;
 };
 
 void MatchmakingPlugin::onLoad()
@@ -28,7 +41,56 @@ void MatchmakingPlugin::onUnload()
 
 void MatchmakingPlugin::HookEvents()
 {
-    gameWrapper->HookEventPost("Function TAGame.GameEvent_Soccar_TA.EventMatchEnded", std::bind(&MatchmakingPlugin::OnGameEnd, this));
+    gameWrapper->HookEventWithCallerPost<ServerWrapper>(
+        "Function TAGame.GameEvent_Soccar_TA.EventMatchStarted",
+        std::bind(&MatchmakingPlugin::OnMatchStart, this, std::placeholders::_1));
+    gameWrapper->HookEventPost(
+        "Function TAGame.GameEvent_Soccar_TA.EventMatchEnded",
+        std::bind(&MatchmakingPlugin::OnGameEnd, this));
+}
+
+void MatchmakingPlugin::OnMatchStart(ServerWrapper server)
+{
+    stats.clear();
+    TickBoost();
+}
+
+void MatchmakingPlugin::TickBoost()
+{
+    ServerWrapper sw = gameWrapper->GetCurrentGameState();
+    if (sw)
+    {
+        ArrayWrapper<PriWrapper> pris = sw.GetPRIs();
+        for (int i = 0; i < pris.Count(); ++i)
+        {
+            PriWrapper pri = pris.Get(i);
+            if (!pri)
+                continue;
+
+            std::string name = pri.GetPlayerName().ToString();
+            CarWrapper car = pri.GetCar();
+            if (!car)
+                continue;
+            BoostWrapper boost = car.GetBoostComponent();
+            if (!boost)
+                continue;
+
+            PlayerStats &ps = stats[name];
+            float current = boost.GetCurrentBoostAmount();
+            if (ps.lastBoost >= 0 && current - ps.lastBoost > 1.f)
+            {
+                ps.boostPickups++;
+                if (ps.lastBoost >= boost.GetMaxBoostAmount() * 0.8f)
+                    ps.wastedBoosts++;
+                if (current - ps.lastBoost > 90.f)
+                    ps.bigPads++;
+                else
+                    ps.smallPads++;
+            }
+            ps.lastBoost = current;
+        }
+    }
+    gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::TickBoost, this), 0.1f);
 }
 
 void MatchmakingPlugin::OnGameEnd()
@@ -58,14 +120,21 @@ void MatchmakingPlugin::OnGameEnd()
         if (!pri)
             continue;
 
+        std::string pname = pri.GetPlayerName().ToString();
+        PlayerStats ps = stats[pname];
+        float totalTime = sw.GetGameEventAsServer().GetTotalGameTimePlayed();
         json p = {
-            {"name", pri.GetPlayerName().ToString()},
+            {"name", pname},
             {"team", pri.GetTeamNum2()},
             {"goals", pri.GetMatchGoals()},
             {"assists", pri.GetMatchAssists()},
             {"shots", pri.GetMatchShots()},
             {"saves", pri.GetMatchSaves()},
-            {"score", pri.GetMatchScore()}
+            {"score", pri.GetMatchScore()},
+            {"boostPickups", ps.boostPickups},
+            {"wastedBoostPickups", ps.wastedBoosts},
+            {"boostFrequency", totalTime > 0 ? ps.boostPickups / totalTime : 0},
+            {"rotationQuality", ps.boostPickups > 0 ? (float)ps.smallPads / ps.boostPickups : 0}
         };
         players.push_back(p);
 
