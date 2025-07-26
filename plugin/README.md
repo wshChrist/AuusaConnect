@@ -19,3 +19,4 @@ Il transmet notamment :
 - le nom du MVP ;
 - pour chaque joueur, son nombre de buts, de passes décisives, de tirs cadrés, d'arrêts et son score.
 - les noms exacts des équipes telles qu'affichées en jeu.
+- pour chaque joueur, des statistiques de boost et un indicateur de qualité de rotation (nombre de ramassages, gaspillage, fréquence d'utilisation et part de petits pads).
