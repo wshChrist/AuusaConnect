@@ -122,7 +122,8 @@ void MatchmakingPlugin::OnGameEnd()
 
         std::string pname = pri.GetPlayerName().ToString();
         PlayerStats ps = stats[pname];
-        float totalTime = sw.GetGameEventAsServer().GetTotalGameTimePlayed();
+        // Utilise directement le temps total de jeu expose par ServerWrapper
+        float totalTime = sw.GetTotalGameTimePlayed();
         json p = {
             {"name", pname},
             {"team", pri.GetTeamNum2()},
