@@ -35,8 +35,8 @@ void MatchmakingPlugin::OnGameEnd()
     if (!sw)
         return;
 
-    int scoreBlue = sw.GetGameEventAsServer().GetTeams().Get(0).GetScore();
-    int scoreOrange = sw.GetGameEventAsServer().GetTeams().Get(1).GetScore();
+    int scoreBlue = sw.GetTeams().Get(0).GetScore();
+    int scoreOrange = sw.GetTeams().Get(1).GetScore();
 
     json payload = {
         {"scoreBlue", scoreBlue},
