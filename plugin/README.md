@@ -11,4 +11,10 @@ Ce dossier contient un squelette de plugin Bakkesmod.
 
 ## Fonctionnement
 
-Le plugin récupère des informations simples en fin de match et les envoie au bot Discord via une requête HTTP POST.
+Le plugin récupère les informations de fin de match et les envoie au bot Discord via une requête HTTP POST.
+Il transmet notamment :
+
+- le score global des équipes ;
+- la liste des joueurs ayant marqué ;
+- le nom du MVP ;
+- pour chaque joueur, son nombre de buts, d'arrêts et son score.
