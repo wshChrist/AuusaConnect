@@ -19,3 +19,7 @@ npm install
 ```bash
 DISCORD_TOKEN=VOTRE_TOKEN node index.js
 ```
+
+Au premier lancement, le bot enregistre automatiquement la commande slash
+`/setchannel`. Utilisez-la dans le salon souhaité pour que les scores y soient
+publiés.
