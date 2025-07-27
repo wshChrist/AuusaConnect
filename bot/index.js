@@ -25,8 +25,9 @@ app.post('/match', (req, res) => {
     const orangePlayers = players.filter(p => p.team === 1);
     const sum = (arr, field) => arr.reduce((acc, p) => acc + (p[field] || 0), 0);
     const rotationScore = arr => {
-      if (!arr.length) return 0;
-      const avg = arr.reduce((acc, p) => acc + (p.rotationQuality || 0), 0) / arr.length;
+      const valid = arr.filter(p => typeof p.rotationQuality === 'number' && p.rotationQuality > 0);
+      if (!valid.length) return 0;
+      const avg = valid.reduce((acc, p) => acc + p.rotationQuality, 0) / valid.length;
       return Math.round(avg * 100);
     };
 
@@ -34,13 +35,17 @@ app.post('/match', (req, res) => {
       let best = null;
       let bestVal = -Infinity;
       for (const p of players) {
+        const rotation =
+          typeof p.rotationQuality === 'number' && p.rotationQuality > 0
+            ? p.rotationQuality
+            : 0;
         const val =
           (p.score || 0) +
           (p.goals || 0) * 100 +
           (p.assists || 0) * 50 +
           (p.saves || 0) * 50 +
           (p.shots || 0) * 10 +
-          ((p.rotationQuality || 0) * 100);
+          rotation * 100;
         if (val > bestVal) {
           bestVal = val;
           best = p;
@@ -67,7 +72,7 @@ app.post('/match', (req, res) => {
         {
           name: '👑 Homme du match :',
           value: motmPlayer
-            ? `**${motmPlayer.name}** (Buts: ${motmPlayer.goals}, Passes: ${motmPlayer.assists}, Arrêts: ${motmPlayer.saves}, Score: ${motmPlayer.score}, Rotation: ${Math.round((motmPlayer.rotationQuality || 0) * 100)}/100)`
+            ? `**${motmPlayer.name}** (Buts: ${motmPlayer.goals}, Passes: ${motmPlayer.assists}, Arrêts: ${motmPlayer.saves}, Score: ${motmPlayer.score}, Rotation: ${Math.round((typeof motmPlayer.rotationQuality === 'number' && motmPlayer.rotationQuality > 0 ? motmPlayer.rotationQuality : 0) * 100)}/100)`
             : 'Aucun',
           inline: false
         }
