@@ -1,4 +1,5 @@
 #include "bakkesmod/plugin/bakkesmodplugin.h"
+#include "bakkesmod/wrappers/WrapperStructs.h"
 #include <cpr/cpr.h>
 #include <nlohmann/json.hpp>
 #include <vector>
@@ -37,6 +38,9 @@ private:
     void OnHitBall(CarWrapper car);
     void OnDemolition(CarWrapper car);
     void OnGameEnd();
+    void OnGoalScored(std::string eventName);
+    void OnBallTouch(std::string eventName);
+    void OnDemolition(std::string eventName);
 
     std::map<std::string, PlayerStats> stats;
     Vector lastBallVel;
@@ -90,6 +94,8 @@ void MatchmakingPlugin::TickStats()
             lastBallVel = ball.GetVelocity();
 
         ArrayWrapper<PriWrapper> pris = sw.GetPRIs();
+        BallWrapper ball = sw.GetBall();
+        Vector ballLoc = ball.GetLocation();
         for (int i = 0; i < pris.Count(); ++i)
         {
             PriWrapper pri = pris.Get(i);
@@ -189,9 +195,9 @@ void MatchmakingPlugin::OnGameEnd()
         json p = {
             {"name", pname},
             {"team", pri.GetTeamNum2()},
-            {"goals", pri.GetMatchGoals()},
-            {"assists", pri.GetMatchAssists()},
-            {"shots", pri.GetMatchShots()},
+            {"goals", ps.goals > 0 ? ps.goals : pri.GetMatchGoals()},
+            {"assists", ps.assists > 0 ? ps.assists : pri.GetMatchAssists()},
+            {"shots", ps.shotsOnTarget > 0 ? ps.shotsOnTarget : pri.GetMatchShots()},
             {"saves", pri.GetMatchSaves()},
             {"score", pri.GetMatchScore()},
             {"boostPickups", ps.boostPickups},
@@ -207,7 +213,7 @@ void MatchmakingPlugin::OnGameEnd()
         };
         players.push_back(p);
 
-        if (pri.GetMatchGoals() > 0)
+        if ((ps.goals > 0 ? ps.goals : pri.GetMatchGoals()) > 0)
             scorers.push_back(pri.GetPlayerName().ToString());
 
         if (pri.GetMatchScore() > bestScore)
@@ -290,3 +296,136 @@ void MatchmakingPlugin::OnDemolition(CarWrapper car)
 }
 
 BAKKESMOD_PLUGIN(MatchmakingPlugin, "Matchmaking Plugin", "1.0", 0)
+
+void MatchmakingPlugin::OnGoalScored(std::string)
+{
+    ServerWrapper sw = gameWrapper->GetCurrentGameState();
+    if (!sw)
+        return;
+
+    PriWrapper scorer = sw.GetGameEventAsServer().GetLastGoalScorer();
+    if (!scorer)
+        return;
+
+    std::string name = scorer.GetPlayerName().ToString();
+    stats[name].goals++;
+
+    if (!lastTouchPlayer.empty() && lastTouchPlayer != name)
+        stats[lastTouchPlayer].assists++;
+}
+
+void MatchmakingPlugin::OnBallTouch(std::string)
+{
+    ServerWrapper sw = gameWrapper->GetCurrentGameState();
+    if (!sw)
+        return;
+
+    PriWrapper pri = sw.GetBall().GetLastTouchPRI();
+    if (!pri)
+        return;
+
+    float gameTime = sw.GetSecondsElapsed();
+    std::string player = pri.GetPlayerName().ToString();
+
+    // Passe utile
+    if (!lastTouchPlayer.empty() && lastTouchPlayer != player)
+    {
+        PriWrapper prevPri = sw.GetPRIByName(lastTouchPlayer);
+        if (prevPri && prevPri.GetTeamNum2() == pri.GetTeamNum2() && gameTime - lastTouchTime < 2.f)
+            stats[lastTouchPlayer].usefulPasses++;
+    }
+
+    lastTouchPlayer = player;
+    lastTouchTime = gameTime;
+    lastTeamTouchPlayer[pri.GetTeamNum2()] = player;
+    lastTeamTouchTime[pri.GetTeamNum2()] = gameTime;
+
+    PlayerStats &ps = stats[player];
+    ps.ballTouches++;
+    ps.inAttack = true;
+    ps.timeSinceAttack = 0.f;
+
+    BallWrapper ball = sw.GetBall();
+    if (ball.WasLastShotOnGoal())
+        ps.shotsOnTarget++;
+
+    // Relance propre
+    Vector prevBall = lastBallLocation;
+    Vector newBall = ball.GetLocation();
+    if ((pri.GetTeamNum2() == 0 && prevBall.X < 0 && newBall.X > 0) ||
+        (pri.GetTeamNum2() == 1 && prevBall.X > 0 && newBall.X < 0))
+        ps.cleanClears++;
+
+    // Open goal rate
+    if (ball.WasLastShotOnGoal())
+    {
+        bool defenderNearby = false;
+        for (int i = 0; i < sw.GetPRIs().Count(); ++i)
+        {
+            PriWrapper opp = sw.GetPRIs().Get(i);
+            if (!opp || opp.GetTeamNum2() == pri.GetTeamNum2())
+                continue;
+            CarWrapper oc = opp.GetCar();
+            if (!oc)
+                continue;
+            if ((oc.GetLocation() - ball.GetLocation()).magnitude() < 2000.f)
+            {
+                defenderNearby = true;
+                break;
+            }
+        }
+        if (!defenderNearby)
+            ps.missedOpenGoals++; // comptera si le tir ne marque pas
+    }
+
+    // Double commit detection: autre joueur tres proche lors de la touche
+    for (int i = 0; i < sw.GetPRIs().Count(); ++i)
+    {
+        PriWrapper other = sw.GetPRIs().Get(i);
+        if (!other || other.GetTeamNum2() != pri.GetTeamNum2() || other.GetPlayerName().ToString() == player)
+            continue;
+        CarWrapper otherCar = other.GetCar();
+        if (!otherCar)
+            continue;
+        float dist = (otherCar.GetLocation() - loc).magnitude();
+        if (dist < 800.f && fabs(lastTeamTouchTime[pri.GetTeamNum2()] - gameTime) < 0.5f)
+        {
+            stats[player].doubleCommits++;
+            stats[other.GetPlayerName().ToString()].doubleCommits++;
+            break;
+        }
+    }
+
+    // Touches inutiles: renvoi vers son propre camp
+    Vector ballLoc = ball.GetLocation();
+    if ((pri.GetTeamNum2() == 0 && ballLoc.X < lastBallLocation.X) ||
+        (pri.GetTeamNum2() == 1 && ballLoc.X > lastBallLocation.X))
+        ps.uselessTouches++;
+    lastBallLocation = ballLoc;
+
+    if (!pri.GetCar().HasWheelContact())
+        ps.aerialTouches++;
+
+    Vector loc = pri.GetCar().GetLocation();
+    if ((pri.GetTeamNum2() == 0 && loc.X > 0) || (pri.GetTeamNum2() == 1 && loc.X < 0))
+        ps.highPressings++;
+}
+
+void MatchmakingPlugin::OnDemolition(std::string)
+{
+    ServerWrapper sw = gameWrapper->GetCurrentGameState();
+    if (!sw)
+        return;
+
+    CarWrapper attacker = sw.GetVehicleToBeDemolisher();
+    if (!attacker)
+        return;
+
+    PriWrapper pri = attacker.GetPRI();
+    if (!pri)
+        return;
+
+    Vector loc = attacker.GetLocation();
+    if ((pri.GetTeamNum2() == 0 && loc.X > 0) || (pri.GetTeamNum2() == 1 && loc.X < 0))
+        stats[pri.GetPlayerName().ToString()].offensiveDemos++;
+}
