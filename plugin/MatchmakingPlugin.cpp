@@ -32,6 +32,25 @@ struct PlayerStats
     float shadowDefenseTime = 0.f;
     int slowPlays = 0;
     int supportPositions = 0;
+    // Vision & Soutien
+    int usefulPasses = 0;
+    int followUps = 0;
+    int cleanClears = 0;
+    float passAvailableTime = 0.f;
+    // Mobilite & Activite
+    float speedSum = 0.f;
+    float usedBoost = 0.f;
+    float effectiveBoost = 0.f;
+    int aerialTouches = 0;
+    int offBallMoves = 0;
+    int ballTouches = 0;
+    // Erreurs / Malus
+    int doubleCommits = 0;
+    int boostSteals = 0;
+    int missedOpenGoals = 0;
+    int badPositions = 0;
+    int boostOveruses = 0;
+    int uselessTouches = 0;
     // Etats internes pour le calcul
     bool inAttack = false;
     float timeSinceAttack = 0.f;
@@ -56,6 +75,10 @@ private:
 
     std::map<std::string, PlayerStats> stats;
     std::string lastTouchPlayer;
+    float lastTouchTime = 0.f;
+    std::string lastTeamTouchPlayer[2];
+    float lastTeamTouchTime[2] = {0.f, 0.f};
+    Vector lastBallLocation{0.f,0.f,0.f};
 };
 
 void MatchmakingPlugin::onLoad()
@@ -91,6 +114,11 @@ void MatchmakingPlugin::OnMatchStart(ServerWrapper server)
 {
     stats.clear();
     lastTouchPlayer.clear();
+    lastTouchTime = 0.f;
+    lastTeamTouchPlayer[0].clear();
+    lastTeamTouchPlayer[1].clear();
+    lastTeamTouchTime[0] = lastTeamTouchTime[1] = 0.f;
+    lastBallLocation = server.GetBall().GetLocation();
     ArrayWrapper<PriWrapper> pris = server.GetPRIs();
     for (int i = 0; i < pris.Count(); ++i)
     {
@@ -136,6 +164,15 @@ void MatchmakingPlugin::TickBoost()
                              (pri.GetTeamNum2() == 1 && location.X < 0);
             if (onOffense)
                 ps.timeInAttack += 0.1f;
+
+            if (lastTeamTouchPlayer[pri.GetTeamNum2()] != name &&
+                gameWrapper->GetCurrentGameState()->GetSecondsElapsed() - lastTeamTouchTime[pri.GetTeamNum2()] < 2.f &&
+                (location - ballLoc).magnitude() < 1500.f && speed > 500.f)
+                ps.followUps++;
+
+            ps.totalTime += 0.1f;
+            float speed = car.GetVelocity().magnitude();
+            ps.speedSum += speed;
 
             // Respect des rotations apres une phase offensive
             if (ps.inAttack)
@@ -199,6 +236,35 @@ void MatchmakingPlugin::TickBoost()
                     ps.bigPads++;
                 else
                     ps.smallPads++;
+                // Vol de boost inutile
+                for (int j = 0; j < pris.Count(); ++j)
+                {
+                    if (j == i)
+                        continue;
+                    PriWrapper mate = pris.Get(j);
+                    if (!mate || mate.GetTeamNum2() != pri.GetTeamNum2())
+                        continue;
+                    CarWrapper mateCar = mate.GetCar();
+                    if (!mateCar)
+                        continue;
+                    BoostWrapper mateBoost = mateCar.GetBoostComponent();
+                    if (!mateBoost)
+                        continue;
+                    float dist = (mateCar.GetLocation() - location).magnitude();
+                    if (dist < 500.f && mateBoost.GetCurrentBoostAmount() < 30.f && ps.lastBoost > 70.f)
+                    {
+                        ps.boostSteals++;
+                        break;
+                    }
+                }
+            }
+            if (ps.lastBoost >= 0 && current < ps.lastBoost)
+            {
+                ps.usedBoost += ps.lastBoost - current;
+                if (speed > 400.f)
+                    ps.effectiveBoost += ps.lastBoost - current;
+                if (speed > 2200.f)
+                    ps.boostOveruses++;
             }
             ps.lastBoost = current;
 
@@ -206,12 +272,21 @@ void MatchmakingPlugin::TickBoost()
             float distBall = (location - ballLoc).magnitude();
             if (distBall > 1000.f && distBall < 2000.f && behind)
                 ps.supportPositions++;
+            if (behind && distBall < 1500.f)
+                ps.passAvailableTime += 0.1f;
+
+            // Mouvement sans ballon
+            if (distBall > 1500.f && speed > 600.f)
+                ps.offBallMoves++;
 
             // Ralentir le jeu : vitesse lente en possession
-            float speed = car.GetVelocity().magnitude();
             float ballSpeed = ball.GetVelocity().magnitude();
             if (ps.inAttack && speed < 700.f && ballSpeed < 700.f)
                 ps.slowPlays++;
+
+            // Mauvais positionnement
+            if (ahead && matesAhead >= 2)
+                ps.badPositions++;
 
             ps.lastLocation = location;
         }
@@ -272,7 +347,22 @@ void MatchmakingPlugin::OnGameEnd()
             {"thirdManRespect", ps.thirdManOpportunities > 0 ? ps.thirdManRespect / ps.thirdManOpportunities : 1},
             {"shadowDefense", ps.shadowDefenseTime},
             {"slowPlays", ps.slowPlays},
-            {"supportPositions", ps.supportPositions}
+            {"supportPositions", ps.supportPositions},
+            {"usefulPasses", ps.usefulPasses},
+            {"followUps", ps.followUps},
+            {"cleanClears", ps.cleanClears},
+            {"passAvailability", ps.totalTime > 0 ? ps.passAvailableTime / ps.totalTime : 0},
+            {"averageSpeed", ps.totalTime > 0 ? ps.speedSum / ps.totalTime : 0},
+            {"boostEfficiency", ps.usedBoost > 0 ? ps.effectiveBoost / ps.usedBoost : 0},
+            {"aerialTouches", ps.aerialTouches},
+            {"offBallMoves", ps.offBallMoves},
+            {"touchesPerMinute", ps.totalTime > 0 ? (ps.ballTouches / ps.totalTime) * 60.f : 0},
+            {"doubleCommits", ps.doubleCommits},
+            {"boostSteals", ps.boostSteals},
+            {"missedOpens", ps.missedOpenGoals},
+            {"badPositions", ps.badPositions},
+            {"boostOveruses", ps.boostOveruses},
+            {"uselessTouches", ps.uselessTouches}
         };
         players.push_back(p);
 
@@ -330,15 +420,87 @@ void MatchmakingPlugin::OnBallTouch(std::string)
     if (!pri)
         return;
 
-    lastTouchPlayer = pri.GetPlayerName().ToString();
+    float gameTime = sw.GetSecondsElapsed();
+    std::string player = pri.GetPlayerName().ToString();
 
-    PlayerStats &ps = stats[lastTouchPlayer];
+    // Passe utile
+    if (!lastTouchPlayer.empty() && lastTouchPlayer != player)
+    {
+        PriWrapper prevPri = sw.GetPRIByName(lastTouchPlayer);
+        if (prevPri && prevPri.GetTeamNum2() == pri.GetTeamNum2() && gameTime - lastTouchTime < 2.f)
+            stats[lastTouchPlayer].usefulPasses++;
+    }
+
+    lastTouchPlayer = player;
+    lastTouchTime = gameTime;
+    lastTeamTouchPlayer[pri.GetTeamNum2()] = player;
+    lastTeamTouchTime[pri.GetTeamNum2()] = gameTime;
+
+    PlayerStats &ps = stats[player];
+    ps.ballTouches++;
     ps.inAttack = true;
     ps.timeSinceAttack = 0.f;
 
     BallWrapper ball = sw.GetBall();
     if (ball.WasLastShotOnGoal())
         ps.shotsOnTarget++;
+
+    // Relance propre
+    Vector prevBall = lastBallLocation;
+    Vector newBall = ball.GetLocation();
+    if ((pri.GetTeamNum2() == 0 && prevBall.X < 0 && newBall.X > 0) ||
+        (pri.GetTeamNum2() == 1 && prevBall.X > 0 && newBall.X < 0))
+        ps.cleanClears++;
+
+    // Open goal rate
+    if (ball.WasLastShotOnGoal())
+    {
+        bool defenderNearby = false;
+        for (int i = 0; i < sw.GetPRIs().Count(); ++i)
+        {
+            PriWrapper opp = sw.GetPRIs().Get(i);
+            if (!opp || opp.GetTeamNum2() == pri.GetTeamNum2())
+                continue;
+            CarWrapper oc = opp.GetCar();
+            if (!oc)
+                continue;
+            if ((oc.GetLocation() - ball.GetLocation()).magnitude() < 2000.f)
+            {
+                defenderNearby = true;
+                break;
+            }
+        }
+        if (!defenderNearby)
+            ps.missedOpenGoals++; // comptera si le tir ne marque pas
+    }
+
+    // Double commit detection: autre joueur tres proche lors de la touche
+    for (int i = 0; i < sw.GetPRIs().Count(); ++i)
+    {
+        PriWrapper other = sw.GetPRIs().Get(i);
+        if (!other || other.GetTeamNum2() != pri.GetTeamNum2() || other.GetPlayerName().ToString() == player)
+            continue;
+        CarWrapper otherCar = other.GetCar();
+        if (!otherCar)
+            continue;
+        float dist = (otherCar.GetLocation() - loc).magnitude();
+        if (dist < 800.f && fabs(lastTeamTouchTime[pri.GetTeamNum2()] - gameTime) < 0.5f)
+        {
+            stats[player].doubleCommits++;
+            stats[other.GetPlayerName().ToString()].doubleCommits++;
+            break;
+        }
+    }
+
+    // Touches inutiles: renvoi vers son propre camp
+    Vector ballLoc = ball.GetLocation();
+    if ((pri.GetTeamNum2() == 0 && ballLoc.X < lastBallLocation.X) ||
+        (pri.GetTeamNum2() == 1 && ballLoc.X > lastBallLocation.X))
+        ps.uselessTouches++;
+    lastBallLocation = ballLoc;
+
+    if (!pri.GetCar().HasWheelContact())
+        ps.aerialTouches++;
 
     Vector loc = pri.GetCar().GetLocation();
     if ((pri.GetTeamNum2() == 0 && loc.X > 0) || (pri.GetTeamNum2() == 1 && loc.X < 0))
