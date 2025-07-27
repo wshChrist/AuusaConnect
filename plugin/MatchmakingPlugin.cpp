@@ -22,6 +22,21 @@ struct PlayerStats
     int offensiveParticipation = 0;
     float timeInAttack = 0.f;
     int highPressings = 0;
+    // Statistiques d'intelligence de jeu
+    float respectedRotation = 0.f;
+    float rotationOpportunities = 0.f;
+    int rotationCuts = 0;
+    int smartBoosts = 0;
+    float thirdManRespect = 0.f;
+    float thirdManOpportunities = 0.f;
+    float shadowDefenseTime = 0.f;
+    int slowPlays = 0;
+    int supportPositions = 0;
+    // Etats internes pour le calcul
+    bool inAttack = false;
+    float timeSinceAttack = 0.f;
+    Vector lastLocation{0.f,0.f,0.f};
+    bool wasAhead = false;
 };
 
 class MatchmakingPlugin : public BakkesMod::Plugin::BakkesModPlugin
@@ -76,6 +91,17 @@ void MatchmakingPlugin::OnMatchStart(ServerWrapper server)
 {
     stats.clear();
     lastTouchPlayer.clear();
+    ArrayWrapper<PriWrapper> pris = server.GetPRIs();
+    for (int i = 0; i < pris.Count(); ++i)
+    {
+        PriWrapper pri = pris.Get(i);
+        if (!pri)
+            continue;
+        PlayerStats &ps = stats[pri.GetPlayerName().ToString()];
+        CarWrapper car = pri.GetCar();
+        if (car)
+            ps.lastLocation = car.GetLocation();
+    }
     TickBoost();
 }
 
@@ -85,6 +111,8 @@ void MatchmakingPlugin::TickBoost()
     if (sw)
     {
         ArrayWrapper<PriWrapper> pris = sw.GetPRIs();
+        BallWrapper ball = sw.GetBall();
+        Vector ballLoc = ball.GetLocation();
         for (int i = 0; i < pris.Count(); ++i)
         {
             PriWrapper pri = pris.Get(i);
@@ -101,14 +129,70 @@ void MatchmakingPlugin::TickBoost()
 
             PlayerStats &ps = stats[name];
             Vector location = car.GetLocation();
+            bool ahead = (pri.GetTeamNum2() == 0 && location.X > ballLoc.X) ||
+                         (pri.GetTeamNum2() == 1 && location.X < ballLoc.X);
+            bool behind = !ahead;
             bool onOffense = (pri.GetTeamNum2() == 0 && location.X > 0) ||
-                              (pri.GetTeamNum2() == 1 && location.X < 0);
+                             (pri.GetTeamNum2() == 1 && location.X < 0);
             if (onOffense)
                 ps.timeInAttack += 0.1f;
+
+            // Respect des rotations apres une phase offensive
+            if (ps.inAttack)
+            {
+                ps.rotationOpportunities += 0.1f;
+                if (behind)
+                    ps.respectedRotation += 0.1f;
+                ps.timeSinceAttack += 0.1f;
+                if (ps.timeSinceAttack > 3.f)
+                    ps.inAttack = false;
+            }
+
+            // Troisieme homme
+            int matesAhead = 0;
+            for (int j = 0; j < pris.Count(); ++j)
+            {
+                if (j == i)
+                    continue;
+                PriWrapper other = pris.Get(j);
+                if (!other || other.GetTeamNum2() != pri.GetTeamNum2())
+                    continue;
+                CarWrapper otherCar = other.GetCar();
+                if (!otherCar)
+                    continue;
+                Vector oloc = otherCar.GetLocation();
+                bool oahead = (pri.GetTeamNum2() == 0 && oloc.X > ballLoc.X) ||
+                              (pri.GetTeamNum2() == 1 && oloc.X < ballLoc.X);
+                if (oahead)
+                    matesAhead++;
+            }
+            if (matesAhead >= 2)
+            {
+                ps.thirdManOpportunities += 0.1f;
+                if (behind)
+                    ps.thirdManRespect += 0.1f;
+            }
+
+            // Shadow defense simple : joueur derriere la balle et vitesse vers son but
+            Vector vel = car.GetVelocity();
+            bool retreating = (pri.GetTeamNum2() == 0 && vel.X < 0) ||
+                              (pri.GetTeamNum2() == 1 && vel.X > 0);
+            if (behind && retreating)
+                ps.shadowDefenseTime += 0.1f;
+
+            // Rotation cut detection
+            if (ahead && !ps.wasAhead && matesAhead >= 1)
+                ps.rotationCuts++;
+            ps.wasAhead = ahead;
+
             float current = boost.GetCurrentBoostAmount();
             if (ps.lastBoost >= 0 && current - ps.lastBoost > 1.f)
             {
                 ps.boostPickups++;
+                bool transition = (pri.GetTeamNum2() == 0 && vel.X > 0) ||
+                                   (pri.GetTeamNum2() == 1 && vel.X < 0);
+                if (transition && matesAhead == 0)
+                    ps.smartBoosts++;
                 if (ps.lastBoost >= boost.GetMaxBoostAmount() * 0.8f)
                     ps.wastedBoosts++;
                 if (current - ps.lastBoost > 90.f)
@@ -117,6 +201,19 @@ void MatchmakingPlugin::TickBoost()
                     ps.smallPads++;
             }
             ps.lastBoost = current;
+
+            // Detection des positions de support
+            float distBall = (location - ballLoc).magnitude();
+            if (distBall > 1000.f && distBall < 2000.f && behind)
+                ps.supportPositions++;
+
+            // Ralentir le jeu : vitesse lente en possession
+            float speed = car.GetVelocity().magnitude();
+            float ballSpeed = ball.GetVelocity().magnitude();
+            if (ps.inAttack && speed < 700.f && ballSpeed < 700.f)
+                ps.slowPlays++;
+
+            ps.lastLocation = location;
         }
     }
     gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::TickBoost, this), 0.1f);
@@ -168,7 +265,14 @@ void MatchmakingPlugin::OnGameEnd()
             {"offensiveDemos", ps.offensiveDemos},
             {"participation", ps.offensiveParticipation},
             {"attackTime", ps.timeInAttack},
-            {"pressings", ps.highPressings}
+            {"pressings", ps.highPressings},
+            {"rotationRespect", ps.rotationOpportunities > 0 ? ps.respectedRotation / ps.rotationOpportunities : 1},
+            {"rotationCuts", ps.rotationCuts},
+            {"smartBoostRatio", ps.boostPickups > 0 ? (float)ps.smartBoosts / ps.boostPickups : 0},
+            {"thirdManRespect", ps.thirdManOpportunities > 0 ? ps.thirdManRespect / ps.thirdManOpportunities : 1},
+            {"shadowDefense", ps.shadowDefenseTime},
+            {"slowPlays", ps.slowPlays},
+            {"supportPositions", ps.supportPositions}
         };
         players.push_back(p);
 
@@ -228,13 +332,17 @@ void MatchmakingPlugin::OnBallTouch(std::string)
 
     lastTouchPlayer = pri.GetPlayerName().ToString();
 
+    PlayerStats &ps = stats[lastTouchPlayer];
+    ps.inAttack = true;
+    ps.timeSinceAttack = 0.f;
+
     BallWrapper ball = sw.GetBall();
     if (ball.WasLastShotOnGoal())
-        stats[lastTouchPlayer].shotsOnTarget++;
+        ps.shotsOnTarget++;
 
     Vector loc = pri.GetCar().GetLocation();
     if ((pri.GetTeamNum2() == 0 && loc.X > 0) || (pri.GetTeamNum2() == 1 && loc.X < 0))
-        stats[lastTouchPlayer].highPressings++;
+        ps.highPressings++;
 }
 
 void MatchmakingPlugin::OnDemolition(std::string)
