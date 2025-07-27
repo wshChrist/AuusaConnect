@@ -1,4 +1,5 @@
 #include "bakkesmod/plugin/bakkesmodplugin.h"
+#include "bakkesmod/wrappers/WrapperStructs.h"
 #include <cpr/cpr.h>
 #include <nlohmann/json.hpp>
 #include <vector>
@@ -13,6 +14,14 @@ struct PlayerStats
     int smallPads = 0;
     int bigPads = 0;
     float lastBoost = -1.f;
+    // Statistiques offensives
+    int goals = 0;
+    int assists = 0;
+    int shotsOnTarget = 0;
+    int offensiveDemos = 0;
+    int offensiveParticipation = 0;
+    float timeInAttack = 0.f;
+    int highPressings = 0;
 };
 
 class MatchmakingPlugin : public BakkesMod::Plugin::BakkesModPlugin
@@ -26,8 +35,12 @@ private:
     void OnMatchStart(ServerWrapper server);
     void TickBoost();
     void OnGameEnd();
+    void OnGoalScored(std::string eventName);
+    void OnBallTouch(std::string eventName);
+    void OnDemolition(std::string eventName);
 
     std::map<std::string, PlayerStats> stats;
+    std::string lastTouchPlayer;
 };
 
 void MatchmakingPlugin::onLoad()
@@ -47,11 +60,22 @@ void MatchmakingPlugin::HookEvents()
     gameWrapper->HookEventPost(
         "Function TAGame.GameEvent_Soccar_TA.EventMatchEnded",
         std::bind(&MatchmakingPlugin::OnGameEnd, this));
+
+    gameWrapper->HookEventPost(
+        "Function TAGame.GameEvent_Soccar_TA.OnGoalScored",
+        std::bind(&MatchmakingPlugin::OnGoalScored, this, std::placeholders::_1));
+    gameWrapper->HookEventPost(
+        "Function TAGame.Ball_TA.EventHit",
+        std::bind(&MatchmakingPlugin::OnBallTouch, this, std::placeholders::_1));
+    gameWrapper->HookEventPost(
+        "Function TAGame.Car_TA.EventDemolished",
+        std::bind(&MatchmakingPlugin::OnDemolition, this, std::placeholders::_1));
 }
 
 void MatchmakingPlugin::OnMatchStart(ServerWrapper server)
 {
     stats.clear();
+    lastTouchPlayer.clear();
     TickBoost();
 }
 
@@ -76,6 +100,11 @@ void MatchmakingPlugin::TickBoost()
                 continue;
 
             PlayerStats &ps = stats[name];
+            Vector location = car.GetLocation();
+            bool onOffense = (pri.GetTeamNum2() == 0 && location.X > 0) ||
+                              (pri.GetTeamNum2() == 1 && location.X < 0);
+            if (onOffense)
+                ps.timeInAttack += 0.1f;
             float current = boost.GetCurrentBoostAmount();
             if (ps.lastBoost >= 0 && current - ps.lastBoost > 1.f)
             {
@@ -127,19 +156,23 @@ void MatchmakingPlugin::OnGameEnd()
         json p = {
             {"name", pname},
             {"team", pri.GetTeamNum2()},
-            {"goals", pri.GetMatchGoals()},
-            {"assists", pri.GetMatchAssists()},
-            {"shots", pri.GetMatchShots()},
+            {"goals", ps.goals > 0 ? ps.goals : pri.GetMatchGoals()},
+            {"assists", ps.assists > 0 ? ps.assists : pri.GetMatchAssists()},
+            {"shots", ps.shotsOnTarget > 0 ? ps.shotsOnTarget : pri.GetMatchShots()},
             {"saves", pri.GetMatchSaves()},
             {"score", pri.GetMatchScore()},
             {"boostPickups", ps.boostPickups},
             {"wastedBoostPickups", ps.wastedBoosts},
             {"boostFrequency", totalTime > 0 ? ps.boostPickups / totalTime : 0},
-            {"rotationQuality", ps.boostPickups > 0 ? (float)ps.smallPads / ps.boostPickups : 0}
+            {"rotationQuality", ps.boostPickups > 0 ? (float)ps.smallPads / ps.boostPickups : 0},
+            {"offensiveDemos", ps.offensiveDemos},
+            {"participation", ps.offensiveParticipation},
+            {"attackTime", ps.timeInAttack},
+            {"pressings", ps.highPressings}
         };
         players.push_back(p);
 
-        if (pri.GetMatchGoals() > 0)
+        if ((ps.goals > 0 ? ps.goals : pri.GetMatchGoals()) > 0)
             scorers.push_back(pri.GetPlayerName().ToString());
 
         if (pri.GetMatchScore() > bestScore)
@@ -165,3 +198,60 @@ void MatchmakingPlugin::OnGameEnd()
 }
 
 BAKKESMOD_PLUGIN(MatchmakingPlugin, "Matchmaking Plugin", "1.0", 0)
+
+void MatchmakingPlugin::OnGoalScored(std::string)
+{
+    ServerWrapper sw = gameWrapper->GetCurrentGameState();
+    if (!sw)
+        return;
+
+    PriWrapper scorer = sw.GetGameEventAsServer().GetLastGoalScorer();
+    if (!scorer)
+        return;
+
+    std::string name = scorer.GetPlayerName().ToString();
+    stats[name].goals++;
+
+    if (!lastTouchPlayer.empty() && lastTouchPlayer != name)
+        stats[lastTouchPlayer].assists++;
+}
+
+void MatchmakingPlugin::OnBallTouch(std::string)
+{
+    ServerWrapper sw = gameWrapper->GetCurrentGameState();
+    if (!sw)
+        return;
+
+    PriWrapper pri = sw.GetBall().GetLastTouchPRI();
+    if (!pri)
+        return;
+
+    lastTouchPlayer = pri.GetPlayerName().ToString();
+
+    BallWrapper ball = sw.GetBall();
+    if (ball.WasLastShotOnGoal())
+        stats[lastTouchPlayer].shotsOnTarget++;
+
+    Vector loc = pri.GetCar().GetLocation();
+    if ((pri.GetTeamNum2() == 0 && loc.X > 0) || (pri.GetTeamNum2() == 1 && loc.X < 0))
+        stats[lastTouchPlayer].highPressings++;
+}
+
+void MatchmakingPlugin::OnDemolition(std::string)
+{
+    ServerWrapper sw = gameWrapper->GetCurrentGameState();
+    if (!sw)
+        return;
+
+    CarWrapper attacker = sw.GetVehicleToBeDemolisher();
+    if (!attacker)
+        return;
+
+    PriWrapper pri = attacker.GetPRI();
+    if (!pri)
+        return;
+
+    Vector loc = attacker.GetLocation();
+    if ((pri.GetTeamNum2() == 0 && loc.X > 0) || (pri.GetTeamNum2() == 1 && loc.X < 0))
+        stats[pri.GetPlayerName().ToString()].offensiveDemos++;
+}
