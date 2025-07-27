@@ -33,6 +33,9 @@ app.post('/match', (req, res) => {
         lines.push(
           `\u2514 Boosts pris: ${p.boostPickups} (gaspillés: ${p.wastedBoostPickups}), fréquence ${p.boostFrequency.toFixed(2)}/s, ${rotation}`
         );
+        lines.push(
+          `\u2514 Temps en attaque: ${p.attackTime.toFixed(1)}s, pressings: ${p.pressings}, démolitions offensives: ${p.offensiveDemos}`
+        );
       }
     }
     channel.send(lines.join('\n'));
