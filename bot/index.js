@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits } from 'discord.js';
+import { Client, GatewayIntentBits, EmbedBuilder } from 'discord.js';
 import express from 'express';
 import bodyParser from 'body-parser';
 
@@ -20,25 +20,35 @@ app.post('/match', (req, res) => {
   } = req.body;
   if (channelId && client.channels.cache.has(channelId)) {
     const channel = client.channels.cache.get(channelId);
-    const lines = [`Match terminé: ${teamBlue} ${scoreBlue} - ${teamOrange} ${scoreOrange}`];
-    if (mvp) lines.push(`MVP : ${mvp}`);
-    if (scorers.length) lines.push(`Buteurs : ${scorers.join(', ')}`);
-    if (players.length) {
-      lines.push('Scores joueurs :');
-      for (const p of players) {
-        lines.push(
-          `${p.name} - ${p.goals} buts, ${p.assists} passes, ${p.shots} tirs, ${p.saves} arrêts, ${p.score} pts`
-        );
-        const rotation = p.rotationQuality >= 0.6 ? 'respecte la rotation' : 'ne respecte pas la rotation';
-        lines.push(
-          `\u2514 Boosts pris: ${p.boostPickups} (gaspillés: ${p.wastedBoostPickups}), fréquence ${p.boostFrequency.toFixed(2)}/s, ${rotation}`
-        );
-        lines.push(
-          `\u2514 Temps en attaque: ${p.attackTime.toFixed(1)}s, pressings: ${p.pressings}, démolitions offensives: ${p.offensiveDemos}`
-        );
-      }
-    }
-    channel.send(lines.join('\n'));
+
+    const bluePlayers = players.filter(p => p.team === 0);
+    const orangePlayers = players.filter(p => p.team === 1);
+    const sum = (arr, field) => arr.reduce((acc, p) => acc + (p[field] || 0), 0);
+    const rotationScore = arr => {
+      if (!arr.length) return 0;
+      const avg = arr.reduce((acc, p) => acc + (p.rotationQuality || 0), 0) / arr.length;
+      return Math.round(avg * 100);
+    };
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🏁 Match terminé : ${teamBlue} ${scoreBlue} – ${scoreOrange} ${teamOrange}`)
+      .addFields(
+        {
+          name: `🔵 ${teamBlue}`,
+          value: `👤 : ${bluePlayers.map(p => p.name).join(', ')}\n🎯 Tirs : ${sum(bluePlayers, 'shots')}\t⚽ Buts : ${sum(bluePlayers, 'goals')}\t🛡️ Arrêts : ${sum(bluePlayers, 'saves')}\n🔄 Score de rotation : ${rotationScore(bluePlayers)}/100`,
+          inline: false
+        },
+        {
+          name: `🟠 ${teamOrange}`,
+          value: `👤 : ${orangePlayers.map(p => p.name).join(', ')}\n🎯 Tirs : ${sum(orangePlayers, 'shots')}\t⚽ Buts : ${sum(orangePlayers, 'goals')}\t🛡️ Arrêts : ${sum(orangePlayers, 'saves')}\n🔄 Score de rotation : ${rotationScore(orangePlayers)}/100`,
+          inline: true
+        }
+      )
+      .setColor('#00b0f4')
+      .setFooter({ text: 'Auusa.gg' })
+      .setTimestamp();
+
+    channel.send({ embeds: [embed] });
   }
   res.sendStatus(200);
 });
