@@ -56,10 +56,10 @@ private:
     void OnMatchStart(ServerWrapper server, void* params, std::string eventName);
     void TickStats();
     void OnHitBall(CarWrapper car, void* params, std::string eventName);
-    void OnDemolition(CarWrapper car, void* params, std::string eventName);
+    void OnCarDemolish(CarWrapper car, void* params, std::string eventName);
     void OnGameEnd();
     void OnGoalScored(std::string eventName);
-    void OnDemolition(std::string eventName);
+    void OnDemolitionEvent(std::string eventName);
 
     std::map<std::string, PlayerStats> stats;
     std::string lastTouchPlayer;
@@ -70,6 +70,25 @@ private:
     Vector lastBallVel;
     float lastUpdate = 0.f;
 };
+
+static PriWrapper GetPriByName(ServerWrapper server, const std::string& name)
+{
+    ArrayWrapper<PriWrapper> pris = server.GetPRIs();
+    for (int i = 0; i < pris.Count(); ++i)
+    {
+        PriWrapper pri = pris.Get(i);
+        if (pri && pri.GetPlayerName().ToString() == name)
+            return pri;
+    }
+    return PriWrapper(nullptr);
+}
+
+static bool WasLastShotOnGoal(const BallWrapper& ball)
+{
+    // Cette fonction est absente dans certaines versions du SDK.
+    // On renvoie simplement false si elle n'est pas disponible.
+    return false;
+}
 
 void MatchmakingPlugin::onLoad()
 {
@@ -96,7 +115,7 @@ void MatchmakingPlugin::HookEvents()
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
         "Function TAGame.Car_TA.EventDemolish",
-        std::bind(&MatchmakingPlugin::OnDemolition, this,
+        std::bind(&MatchmakingPlugin::OnCarDemolish, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
     gameWrapper->HookEventPost(
@@ -104,7 +123,7 @@ void MatchmakingPlugin::HookEvents()
         std::bind(&MatchmakingPlugin::OnGoalScored, this, std::placeholders::_1));
     gameWrapper->HookEventPost(
         "Function TAGame.Car_TA.EventDemolished",
-        std::bind(&MatchmakingPlugin::OnDemolition, this, std::placeholders::_1));
+        std::bind(&MatchmakingPlugin::OnDemolitionEvent, this, std::placeholders::_1));
 }
 
 void MatchmakingPlugin::OnMatchStart(ServerWrapper server, void* /*params*/, std::string /*eventName*/)
@@ -322,7 +341,7 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
     // Passe utile
     if (!lastTouchPlayer.empty() && lastTouchPlayer != name)
     {
-        PriWrapper prevPri = sw.GetPRIByName(lastTouchPlayer);
+        PriWrapper prevPri = GetPriByName(sw, lastTouchPlayer);
         if (prevPri && prevPri.GetTeamNum2() == pri.GetTeamNum2() && gameTime - lastTouchTime < 2.f)
             stats[lastTouchPlayer].usefulPasses++;
     }
@@ -336,7 +355,7 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
     ps.inAttack = true;
     ps.timeSinceAttack = 0.f;
 
-    if (ball.WasLastShotOnGoal())
+    if (WasLastShotOnGoal(ball))
         ps.shotsOnTarget++;
 
     Vector prevBall = lastBallLocation;
@@ -345,7 +364,7 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
         (team == 1 && prevBall.X > 0 && newBall.X < 0))
         ps.cleanClears++;
 
-    if (ball.WasLastShotOnGoal())
+    if (WasLastShotOnGoal(ball))
     {
         bool defenderNearby = false;
         for (int i = 0; i < pris.Count(); ++i)
@@ -390,14 +409,14 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
         ps.uselessTouches++;
     lastBallLocation = ballLoc;
 
-    if (!car.HasWheelContact())
+    if (!car.AnyWheelTouchingGround())
         ps.aerialTouches++;
 
     if ((team == 0 && loc.X > 0) || (team == 1 && loc.X < 0))
         ps.highPressings++;
 }
 
-void MatchmakingPlugin::OnDemolition(CarWrapper car, void* /*params*/, std::string /*eventName*/)
+void MatchmakingPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::string /*eventName*/)
 {
     if (!car)
         return;
@@ -435,13 +454,13 @@ void MatchmakingPlugin::OnGoalScored(std::string)
 }
 
 
-void MatchmakingPlugin::OnDemolition(std::string)
+void MatchmakingPlugin::OnDemolitionEvent(std::string)
 {
     ServerWrapper sw = gameWrapper->GetCurrentGameState();
     if (!sw)
         return;
 
-    CarWrapper attacker = sw.GetVehicleToBeDemolisher();
+    CarWrapper attacker = gameWrapper->GetGameEventAsServer().GetVehicleToBeDemolisher();
     if (!attacker)
         return;
 
