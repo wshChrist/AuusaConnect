@@ -59,7 +59,6 @@ private:
     void OnCarDemolish(CarWrapper car, void* params, std::string eventName);
     void OnGameEnd();
     void OnGoalScored(std::string eventName);
-    void OnDemolitionEvent(std::string eventName);
 
     std::map<std::string, PlayerStats> stats;
     std::string lastTouchPlayer;
@@ -80,7 +79,8 @@ static PriWrapper GetPriByName(ServerWrapper server, const std::string& name)
         if (pri && pri.GetPlayerName().ToString() == name)
             return pri;
     }
-    return PriWrapper(nullptr);
+    // Constructeur par défaut non disponible, on renvoie un wrapper nul
+    return PriWrapper(0);
 }
 
 static bool WasLastShotOnGoal(const BallWrapper& ball)
@@ -121,9 +121,8 @@ void MatchmakingPlugin::HookEvents()
     gameWrapper->HookEventPost(
         "Function TAGame.GameEvent_Soccar_TA.OnGoalScored",
         std::bind(&MatchmakingPlugin::OnGoalScored, this, std::placeholders::_1));
-    gameWrapper->HookEventPost(
-        "Function TAGame.Car_TA.EventDemolished",
-        std::bind(&MatchmakingPlugin::OnDemolitionEvent, this, std::placeholders::_1));
+    // On gère les démolitions directement dans OnCarDemolish,
+    // cette écoute n'est plus nécessaire.
 }
 
 void MatchmakingPlugin::OnMatchStart(ServerWrapper server, void* /*params*/, std::string /*eventName*/)
@@ -432,6 +431,20 @@ void MatchmakingPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::str
         PlayerStats &ps = stats[pri.GetPlayerName().ToString()];
         ps.defensiveDemos++;
     }
+
+    // Identifie le démolisseur via le champ Attacker du CarWrapper
+    PriWrapper attacker = car.GetAttackerPRI();
+    if (attacker)
+    {
+        CarWrapper ac = attacker.GetCar();
+        if (ac)
+        {
+            Vector aloc = ac.GetLocation();
+            int aTeam = attacker.GetTeamNum2();
+            if ((aTeam == 0 && aloc.X > 0) || (aTeam == 1 && aloc.X < 0))
+                stats[attacker.GetPlayerName().ToString()].offensiveDemos++;
+        }
+    }
 }
 
 BAKKESMOD_PLUGIN(MatchmakingPlugin, "Matchmaking Plugin", "1.0", 0)
@@ -442,33 +455,22 @@ void MatchmakingPlugin::OnGoalScored(std::string)
     if (!sw)
         return;
 
-    PriWrapper scorer = gameWrapper->GetGameEventAsServer().GetLastGoalScorer();
+    // Certaines versions du SDK ne fournissent pas la méthode GetLastGoalScorer.
+    // On détermine donc le buteur à partir du dernier joueur ayant touché la balle.
+    if (lastTouchPlayer.empty())
+        return;
+
+    PriWrapper scorer = GetPriByName(sw, lastTouchPlayer);
     if (!scorer)
         return;
 
-    std::string name = scorer.GetPlayerName().ToString();
+    std::string name = lastTouchPlayer;
     stats[name].goals++;
 
-    if (!lastTouchPlayer.empty() && lastTouchPlayer != name)
-        stats[lastTouchPlayer].assists++;
+    int team = scorer.GetTeamNum2();
+    std::string assister = lastTeamTouchPlayer[team];
+    if (!assister.empty() && assister != name)
+        stats[assister].assists++;
 }
 
 
-void MatchmakingPlugin::OnDemolitionEvent(std::string)
-{
-    ServerWrapper sw = gameWrapper->GetCurrentGameState();
-    if (!sw)
-        return;
-
-    CarWrapper attacker = gameWrapper->GetGameEventAsServer().GetVehicleToBeDemolisher();
-    if (!attacker)
-        return;
-
-    PriWrapper pri = attacker.GetPRI();
-    if (!pri)
-        return;
-
-    Vector loc = attacker.GetLocation();
-    if ((pri.GetTeamNum2() == 0 && loc.X > 0) || (pri.GetTeamNum2() == 1 && loc.X < 0))
-        stats[pri.GetPlayerName().ToString()].offensiveDemos++;
-}
