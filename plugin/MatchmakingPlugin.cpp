@@ -15,6 +15,12 @@ struct PlayerStats
     int bigPads = 0;
     float lastBoost = -1.f;
 
+    // Statistiques offensives
+    int goals = 0;
+    int assists = 0;
+    int shotsOnTarget = 0;
+    int offensiveDemos = 0;
+
     // Statistiques defensives
     int clearances = 0;
     int challengesWon = 0;
@@ -22,6 +28,20 @@ struct PlayerStats
     float defenseTime = 0.f;
     int clutchSaves = 0;
     int blocks = 0;
+
+    // Vision & soutien
+    int usefulPasses = 0;
+    int cleanClears = 0;
+    int missedOpenGoals = 0;
+    int doubleCommits = 0;
+    int uselessTouches = 0;
+    int aerialTouches = 0;
+    int highPressings = 0;
+    int ballTouches = 0;
+
+    // Etats internes
+    bool inAttack = false;
+    float timeSinceAttack = 0.f;
     int prevSaves = 0;
 };
 
@@ -33,16 +53,20 @@ public:
 
 private:
     void HookEvents();
-    void OnMatchStart(ServerWrapper server);
+    void OnMatchStart(ServerWrapper server, void* params, std::string eventName);
     void TickStats();
-    void OnHitBall(CarWrapper car);
-    void OnDemolition(CarWrapper car);
+    void OnHitBall(CarWrapper car, void* params, std::string eventName);
+    void OnDemolition(CarWrapper car, void* params, std::string eventName);
     void OnGameEnd();
     void OnGoalScored(std::string eventName);
-    void OnBallTouch(std::string eventName);
     void OnDemolition(std::string eventName);
 
     std::map<std::string, PlayerStats> stats;
+    std::string lastTouchPlayer;
+    float lastTouchTime = 0.f;
+    std::string lastTeamTouchPlayer[2];
+    float lastTeamTouchTime[2] = {0.f, 0.f};
+    Vector lastBallLocation{0.f, 0.f, 0.f};
     Vector lastBallVel;
     float lastUpdate = 0.f;
 };
@@ -60,23 +84,39 @@ void MatchmakingPlugin::HookEvents()
 {
     gameWrapper->HookEventWithCallerPost<ServerWrapper>(
         "Function TAGame.GameEvent_Soccar_TA.EventMatchStarted",
-        std::bind(&MatchmakingPlugin::OnMatchStart, this, std::placeholders::_1));
+        std::bind(&MatchmakingPlugin::OnMatchStart, this,
+                  std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     gameWrapper->HookEventPost(
         "Function TAGame.GameEvent_Soccar_TA.EventMatchEnded",
         std::bind(&MatchmakingPlugin::OnGameEnd, this));
 
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
         "Function TAGame.Car_TA.EventHitBall",
-        std::bind(&MatchmakingPlugin::OnHitBall, this, std::placeholders::_1));
+        std::bind(&MatchmakingPlugin::OnHitBall, this,
+                  std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
         "Function TAGame.Car_TA.EventDemolish",
+        std::bind(&MatchmakingPlugin::OnDemolition, this,
+                  std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+
+    gameWrapper->HookEventPost(
+        "Function TAGame.GameEvent_Soccar_TA.OnGoalScored",
+        std::bind(&MatchmakingPlugin::OnGoalScored, this, std::placeholders::_1));
+    gameWrapper->HookEventPost(
+        "Function TAGame.Car_TA.EventDemolished",
         std::bind(&MatchmakingPlugin::OnDemolition, this, std::placeholders::_1));
 }
 
-void MatchmakingPlugin::OnMatchStart(ServerWrapper server)
+void MatchmakingPlugin::OnMatchStart(ServerWrapper server, void* /*params*/, std::string /*eventName*/)
 {
     stats.clear();
     lastUpdate = 0.f;
+    lastTouchPlayer.clear();
+    lastTouchTime = 0.f;
+    lastTeamTouchPlayer[0].clear();
+    lastTeamTouchPlayer[1].clear();
+    lastTeamTouchTime[0] = lastTeamTouchTime[1] = 0.f;
+    lastBallLocation = server.GetBall().GetLocation();
     TickStats();
 }
 
@@ -94,7 +134,6 @@ void MatchmakingPlugin::TickStats()
             lastBallVel = ball.GetVelocity();
 
         ArrayWrapper<PriWrapper> pris = sw.GetPRIs();
-        BallWrapper ball = sw.GetBall();
         Vector ballLoc = ball.GetLocation();
         for (int i = 0; i < pris.Count(); ++i)
         {
@@ -238,7 +277,7 @@ void MatchmakingPlugin::OnGameEnd()
                                 cpr::Header{{"Content-Type", "application/json"}});
 }
 
-void MatchmakingPlugin::OnHitBall(CarWrapper car)
+void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string /*eventName*/)
 {
     if (!car)
         return;
@@ -254,6 +293,8 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car)
     BallWrapper ball = sw.GetBall();
     if (!ball)
         return;
+
+    ArrayWrapper<PriWrapper> pris = sw.GetPRIs();
 
     std::string name = pri.GetPlayerName().ToString();
     PlayerStats &ps = stats[name];
@@ -275,9 +316,88 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car)
     if ((team == 0 && lastBallVel.Y < 0 && ballVel.Y >= 0 && pos.Y < 0) ||
         (team == 1 && lastBallVel.Y > 0 && ballVel.Y <= 0 && pos.Y > 0))
         ps.blocks++;
+
+    float gameTime = sw.GetSecondsElapsed();
+
+    // Passe utile
+    if (!lastTouchPlayer.empty() && lastTouchPlayer != name)
+    {
+        PriWrapper prevPri = sw.GetPRIByName(lastTouchPlayer);
+        if (prevPri && prevPri.GetTeamNum2() == pri.GetTeamNum2() && gameTime - lastTouchTime < 2.f)
+            stats[lastTouchPlayer].usefulPasses++;
+    }
+
+    lastTouchPlayer = name;
+    lastTouchTime = gameTime;
+    lastTeamTouchPlayer[team] = name;
+    lastTeamTouchTime[team] = gameTime;
+
+    ps.ballTouches++;
+    ps.inAttack = true;
+    ps.timeSinceAttack = 0.f;
+
+    if (ball.WasLastShotOnGoal())
+        ps.shotsOnTarget++;
+
+    Vector prevBall = lastBallLocation;
+    Vector newBall = ball.GetLocation();
+    if ((team == 0 && prevBall.X < 0 && newBall.X > 0) ||
+        (team == 1 && prevBall.X > 0 && newBall.X < 0))
+        ps.cleanClears++;
+
+    if (ball.WasLastShotOnGoal())
+    {
+        bool defenderNearby = false;
+        for (int i = 0; i < pris.Count(); ++i)
+        {
+            PriWrapper opp = pris.Get(i);
+            if (!opp || opp.GetTeamNum2() == team)
+                continue;
+            CarWrapper oc = opp.GetCar();
+            if (!oc)
+                continue;
+            if ((oc.GetLocation() - ball.GetLocation()).magnitude() < 2000.f)
+            {
+                defenderNearby = true;
+                break;
+            }
+        }
+        if (!defenderNearby)
+            ps.missedOpenGoals++;
+    }
+
+    Vector loc = car.GetLocation();
+    for (int i = 0; i < pris.Count(); ++i)
+    {
+        PriWrapper other = pris.Get(i);
+        if (!other || other.GetTeamNum2() != team || other.GetPlayerName().ToString() == name)
+            continue;
+        CarWrapper otherCar = other.GetCar();
+        if (!otherCar)
+            continue;
+        float dist = (otherCar.GetLocation() - loc).magnitude();
+        if (dist < 800.f && fabs(lastTeamTouchTime[team] - gameTime) < 0.5f)
+        {
+            stats[name].doubleCommits++;
+            stats[other.GetPlayerName().ToString()].doubleCommits++;
+            break;
+        }
+    }
+
+    Vector ballLoc = ball.GetLocation();
+    if ((team == 0 && ballLoc.X < lastBallLocation.X) ||
+        (team == 1 && ballLoc.X > lastBallLocation.X))
+        ps.uselessTouches++;
+    lastBallLocation = ballLoc;
+
+    if (!car.HasWheelContact())
+        ps.aerialTouches++;
+
+    if ((team == 0 && loc.X > 0) || (team == 1 && loc.X < 0))
+        ps.highPressings++;
 }
 
-void MatchmakingPlugin::OnDemolition(CarWrapper car)
+void MatchmakingPlugin::OnDemolition(CarWrapper car, void* /*params*/, std::string /*eventName*/)
 {
     if (!car)
         return;
@@ -303,7 +423,7 @@ void MatchmakingPlugin::OnGoalScored(std::string)
     if (!sw)
         return;
 
-    PriWrapper scorer = sw.GetGameEventAsServer().GetLastGoalScorer();
+    PriWrapper scorer = gameWrapper->GetGameEventAsServer().GetLastGoalScorer();
     if (!scorer)
         return;
 
@@ -314,102 +434,6 @@ void MatchmakingPlugin::OnGoalScored(std::string)
         stats[lastTouchPlayer].assists++;
 }
 
-void MatchmakingPlugin::OnBallTouch(std::string)
-{
-    ServerWrapper sw = gameWrapper->GetCurrentGameState();
-    if (!sw)
-        return;
-
-    PriWrapper pri = sw.GetBall().GetLastTouchPRI();
-    if (!pri)
-        return;
-
-    float gameTime = sw.GetSecondsElapsed();
-    std::string player = pri.GetPlayerName().ToString();
-
-    // Passe utile
-    if (!lastTouchPlayer.empty() && lastTouchPlayer != player)
-    {
-        PriWrapper prevPri = sw.GetPRIByName(lastTouchPlayer);
-        if (prevPri && prevPri.GetTeamNum2() == pri.GetTeamNum2() && gameTime - lastTouchTime < 2.f)
-            stats[lastTouchPlayer].usefulPasses++;
-    }
-
-    lastTouchPlayer = player;
-    lastTouchTime = gameTime;
-    lastTeamTouchPlayer[pri.GetTeamNum2()] = player;
-    lastTeamTouchTime[pri.GetTeamNum2()] = gameTime;
-
-    PlayerStats &ps = stats[player];
-    ps.ballTouches++;
-    ps.inAttack = true;
-    ps.timeSinceAttack = 0.f;
-
-    BallWrapper ball = sw.GetBall();
-    if (ball.WasLastShotOnGoal())
-        ps.shotsOnTarget++;
-
-    // Relance propre
-    Vector prevBall = lastBallLocation;
-    Vector newBall = ball.GetLocation();
-    if ((pri.GetTeamNum2() == 0 && prevBall.X < 0 && newBall.X > 0) ||
-        (pri.GetTeamNum2() == 1 && prevBall.X > 0 && newBall.X < 0))
-        ps.cleanClears++;
-
-    // Open goal rate
-    if (ball.WasLastShotOnGoal())
-    {
-        bool defenderNearby = false;
-        for (int i = 0; i < sw.GetPRIs().Count(); ++i)
-        {
-            PriWrapper opp = sw.GetPRIs().Get(i);
-            if (!opp || opp.GetTeamNum2() == pri.GetTeamNum2())
-                continue;
-            CarWrapper oc = opp.GetCar();
-            if (!oc)
-                continue;
-            if ((oc.GetLocation() - ball.GetLocation()).magnitude() < 2000.f)
-            {
-                defenderNearby = true;
-                break;
-            }
-        }
-        if (!defenderNearby)
-            ps.missedOpenGoals++; // comptera si le tir ne marque pas
-    }
-
-    // Double commit detection: autre joueur tres proche lors de la touche
-    for (int i = 0; i < sw.GetPRIs().Count(); ++i)
-    {
-        PriWrapper other = sw.GetPRIs().Get(i);
-        if (!other || other.GetTeamNum2() != pri.GetTeamNum2() || other.GetPlayerName().ToString() == player)
-            continue;
-        CarWrapper otherCar = other.GetCar();
-        if (!otherCar)
-            continue;
-        float dist = (otherCar.GetLocation() - loc).magnitude();
-        if (dist < 800.f && fabs(lastTeamTouchTime[pri.GetTeamNum2()] - gameTime) < 0.5f)
-        {
-            stats[player].doubleCommits++;
-            stats[other.GetPlayerName().ToString()].doubleCommits++;
-            break;
-        }
-    }
-
-    // Touches inutiles: renvoi vers son propre camp
-    Vector ballLoc = ball.GetLocation();
-    if ((pri.GetTeamNum2() == 0 && ballLoc.X < lastBallLocation.X) ||
-        (pri.GetTeamNum2() == 1 && ballLoc.X > lastBallLocation.X))
-        ps.uselessTouches++;
-    lastBallLocation = ballLoc;
-
-    if (!pri.GetCar().HasWheelContact())
-        ps.aerialTouches++;
-
-    Vector loc = pri.GetCar().GetLocation();
-    if ((pri.GetTeamNum2() == 0 && loc.X > 0) || (pri.GetTeamNum2() == 1 && loc.X < 0))
-        ps.highPressings++;
-}
 
 void MatchmakingPlugin::OnDemolition(std::string)
 {
