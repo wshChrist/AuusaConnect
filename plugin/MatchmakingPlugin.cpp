@@ -13,6 +13,15 @@ struct PlayerStats
     int smallPads = 0;
     int bigPads = 0;
     float lastBoost = -1.f;
+
+    // Statistiques defensives
+    int clearances = 0;
+    int challengesWon = 0;
+    int defensiveDemos = 0;
+    float defenseTime = 0.f;
+    int clutchSaves = 0;
+    int blocks = 0;
+    int prevSaves = 0;
 };
 
 class MatchmakingPlugin : public BakkesMod::Plugin::BakkesModPlugin
@@ -24,10 +33,14 @@ public:
 private:
     void HookEvents();
     void OnMatchStart(ServerWrapper server);
-    void TickBoost();
+    void TickStats();
+    void OnHitBall(CarWrapper car);
+    void OnDemolition(CarWrapper car);
     void OnGameEnd();
 
     std::map<std::string, PlayerStats> stats;
+    Vector lastBallVel;
+    float lastUpdate = 0.f;
 };
 
 void MatchmakingPlugin::onLoad()
@@ -47,19 +60,35 @@ void MatchmakingPlugin::HookEvents()
     gameWrapper->HookEventPost(
         "Function TAGame.GameEvent_Soccar_TA.EventMatchEnded",
         std::bind(&MatchmakingPlugin::OnGameEnd, this));
+
+    gameWrapper->HookEventWithCallerPost<CarWrapper>(
+        "Function TAGame.Car_TA.EventHitBall",
+        std::bind(&MatchmakingPlugin::OnHitBall, this, std::placeholders::_1));
+    gameWrapper->HookEventWithCallerPost<CarWrapper>(
+        "Function TAGame.Car_TA.EventDemolish",
+        std::bind(&MatchmakingPlugin::OnDemolition, this, std::placeholders::_1));
 }
 
 void MatchmakingPlugin::OnMatchStart(ServerWrapper server)
 {
     stats.clear();
-    TickBoost();
+    lastUpdate = 0.f;
+    TickStats();
 }
 
-void MatchmakingPlugin::TickBoost()
+void MatchmakingPlugin::TickStats()
 {
     ServerWrapper sw = gameWrapper->GetCurrentGameState();
     if (sw)
     {
+        float now = sw.GetSecondsElapsed();
+        float dt = lastUpdate > 0.f ? now - lastUpdate : 0.f;
+        lastUpdate = now;
+
+        BallWrapper ball = sw.GetBall();
+        if (ball)
+            lastBallVel = ball.GetVelocity();
+
         ArrayWrapper<PriWrapper> pris = sw.GetPRIs();
         for (int i = 0; i < pris.Count(); ++i)
         {
@@ -72,25 +101,58 @@ void MatchmakingPlugin::TickBoost()
             if (!car)
                 continue;
             BoostWrapper boost = car.GetBoostComponent();
-            if (!boost)
-                continue;
 
             PlayerStats &ps = stats[name];
-            float current = boost.GetCurrentBoostAmount();
-            if (ps.lastBoost >= 0 && current - ps.lastBoost > 1.f)
+            if (boost)
             {
-                ps.boostPickups++;
-                if (ps.lastBoost >= boost.GetMaxBoostAmount() * 0.8f)
-                    ps.wastedBoosts++;
-                if (current - ps.lastBoost > 90.f)
-                    ps.bigPads++;
-                else
-                    ps.smallPads++;
+                float current = boost.GetCurrentBoostAmount();
+                if (ps.lastBoost >= 0 && current - ps.lastBoost > 1.f)
+                {
+                    ps.boostPickups++;
+                    if (ps.lastBoost >= boost.GetMaxBoostAmount() * 0.8f)
+                        ps.wastedBoosts++;
+                    if (current - ps.lastBoost > 90.f)
+                        ps.bigPads++;
+                    else
+                        ps.smallPads++;
+                }
+                ps.lastBoost = current;
             }
-            ps.lastBoost = current;
+
+            Vector pos = car.GetLocation();
+            int team = pri.GetTeamNum2();
+            bool inDef = (team == 0) ? pos.Y < 0 : pos.Y > 0;
+            if (inDef)
+                ps.defenseTime += dt;
+
+            int saves = pri.GetMatchSaves();
+            if (saves > ps.prevSaves)
+            {
+                ps.prevSaves = saves;
+                bool lastDef = true;
+                for (int j = 0; j < pris.Count(); ++j)
+                {
+                    if (j == i)
+                        continue;
+                    PriWrapper mate = pris.Get(j);
+                    if (!mate || mate.GetTeamNum2() != team)
+                        continue;
+                    CarWrapper mcar = mate.GetCar();
+                    if (!mcar)
+                        continue;
+                    Vector mpos = mcar.GetLocation();
+                    if ((team == 0 && mpos.Y < pos.Y) || (team == 1 && mpos.Y > pos.Y))
+                    {
+                        lastDef = false;
+                        break;
+                    }
+                }
+                if (lastDef)
+                    ps.clutchSaves++;
+            }
         }
     }
-    gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::TickBoost, this), 0.1f);
+    gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::TickStats, this), 0.1f);
 }
 
 void MatchmakingPlugin::OnGameEnd()
@@ -135,7 +197,13 @@ void MatchmakingPlugin::OnGameEnd()
             {"boostPickups", ps.boostPickups},
             {"wastedBoostPickups", ps.wastedBoosts},
             {"boostFrequency", totalTime > 0 ? ps.boostPickups / totalTime : 0},
-            {"rotationQuality", ps.boostPickups > 0 ? (float)ps.smallPads / ps.boostPickups : 0}
+            {"rotationQuality", ps.boostPickups > 0 ? (float)ps.smallPads / ps.boostPickups : 0},
+            {"clearances", ps.clearances},
+            {"defensiveChallenges", ps.challengesWon},
+            {"defensiveDemos", ps.defensiveDemos},
+            {"defenseTime", ps.defenseTime},
+            {"clutchSaves", ps.clutchSaves},
+            {"blocks", ps.blocks}
         };
         players.push_back(p);
 
@@ -162,6 +230,63 @@ void MatchmakingPlugin::OnGameEnd()
     cpr::Response r = cpr::Post(cpr::Url{"http://localhost:3000/match"},
                                 cpr::Body{payload.dump()},
                                 cpr::Header{{"Content-Type", "application/json"}});
+}
+
+void MatchmakingPlugin::OnHitBall(CarWrapper car)
+{
+    if (!car)
+        return;
+
+    PriWrapper pri = car.GetPRI();
+    if (!pri)
+        return;
+
+    ServerWrapper sw = gameWrapper->GetCurrentGameState();
+    if (!sw)
+        return;
+
+    BallWrapper ball = sw.GetBall();
+    if (!ball)
+        return;
+
+    std::string name = pri.GetPlayerName().ToString();
+    PlayerStats &ps = stats[name];
+
+    Vector pos = car.GetLocation();
+    Vector ballPos = ball.GetLocation();
+    Vector ballVel = ball.GetVelocity();
+    int team = pri.GetTeamNum2();
+
+    // degagement : balle envoyee de sa moitie vers l'adversaire
+    if ((team == 0 && pos.Y < 0 && ballPos.Y > 0) || (team == 1 && pos.Y > 0 && ballPos.Y < 0))
+        ps.clearances++;
+
+    // duel gagne dans sa moitie
+    if ((team == 0 && pos.Y < 0) || (team == 1 && pos.Y > 0))
+        ps.challengesWon++;
+
+    // block si la balle allait vers le but et repart a l'oppose
+    if ((team == 0 && lastBallVel.Y < 0 && ballVel.Y >= 0 && pos.Y < 0) ||
+        (team == 1 && lastBallVel.Y > 0 && ballVel.Y <= 0 && pos.Y > 0))
+        ps.blocks++;
+}
+
+void MatchmakingPlugin::OnDemolition(CarWrapper car)
+{
+    if (!car)
+        return;
+
+    PriWrapper pri = car.GetPRI();
+    if (!pri)
+        return;
+
+    Vector pos = car.GetLocation();
+    int team = pri.GetTeamNum2();
+    if ((team == 0 && pos.Y < 0) || (team == 1 && pos.Y > 0))
+    {
+        PlayerStats &ps = stats[pri.GetPlayerName().ToString()];
+        ps.defensiveDemos++;
+    }
 }
 
 BAKKESMOD_PLUGIN(MatchmakingPlugin, "Matchmaking Plugin", "1.0", 0)
