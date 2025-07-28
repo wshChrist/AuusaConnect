@@ -7,15 +7,21 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder
 } from 'discord.js';
+import { setupMatchmaking } from './matchmaking.js';
 import express from 'express';
 import bodyParser from 'body-parser';
 
 const app = express();
 app.use(bodyParser.json());
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
+const client = new Client({ intents: [
+  GatewayIntentBits.Guilds,
+  GatewayIntentBits.GuildMessages,
+  GatewayIntentBits.GuildVoiceStates
+] });
 let channelId = '';
 const matchData = new Map();
+setupMatchmaking(client);
 
 app.post('/match', async (req, res) => {
   const {
