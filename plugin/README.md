@@ -9,6 +9,12 @@ Ce dossier contient un squelette de plugin Bakkesmod.
 3. Ajouter la dépendance à la bibliothèque [cpr](https://github.com/libcpr/cpr) pour effectuer des requêtes HTTP.
 4. Compiler en Release et placer le `.dll` généré dans le dossier `bakkesmod/plugins`.
 
+## Debug
+
+Le plugin expose le cvar `mm_debug` (0 ou 1). Lorsqu'il est activé, chaque \
+événement détecté (dégagement, duel remporté, ramassage de boost, etc.) est \
+affiché dans la console BakkesMod avec le nom du joueur et le temps de jeu.
+
 ## Fonctionnement
 
 Le plugin récupère les informations de fin de match et les envoie au bot Discord via une requête HTTP POST.
