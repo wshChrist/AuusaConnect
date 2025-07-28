@@ -90,11 +90,17 @@ app.post('/match', async (req, res) => {
       .setFooter({ text: 'Auusa.gg' })
       .setTimestamp();
 
-    const btn = new ButtonBuilder()
+    const detailBtn = new ButtonBuilder()
       .setCustomId('details_joueur')
       .setLabel('📊 Détails Joueurs')
       .setStyle(ButtonStyle.Primary);
-    const row = new ActionRowBuilder().addComponents(btn);
+
+    const compareBtn = new ButtonBuilder()
+      .setCustomId('compare_players_button')
+      .setLabel('🏅 Comparaison entre joueurs')
+      .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder().addComponents(detailBtn, compareBtn);
 
     const message = await channel.send({ embeds: [embed], components: [row] });
     matchData.set(message.id, players);
@@ -148,6 +154,31 @@ client.on('interactionCreate', async interaction => {
     return;
   }
 
+  if (interaction.isButton() && interaction.customId === 'compare_players_button') {
+    const players = matchData.get(interaction.message.id);
+    if (!players) {
+      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      return;
+    }
+    const options = players.map(p => ({
+      label: p.name,
+      value: p.name,
+      emoji: p.team === 0 ? '🔵' : '🔴'
+    }));
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`select_compare_${interaction.message.id}`)
+      .setPlaceholder('Choisissez deux joueurs')
+      .setMinValues(2)
+      .setMaxValues(2)
+      .addOptions(options);
+    await interaction.reply({
+      content: 'Sélectionnez deux joueurs à comparer :',
+      components: [new ActionRowBuilder().addComponents(select)],
+      ephemeral: true
+    });
+    return;
+  }
+
   if (interaction.isStringSelectMenu() && interaction.customId.startsWith('select_joueur_detail_')) {
     const matchId = interaction.customId.replace('select_joueur_detail_', '');
     const players = matchData.get(matchId);
@@ -179,6 +210,60 @@ client.on('interactionCreate', async interaction => {
       .setTimestamp();
 
     await interaction.reply({ embeds: [detailEmbed], ephemeral: true });
+    return;
+  }
+
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('select_compare_')) {
+    const matchId = interaction.customId.replace('select_compare_', '');
+    const players = matchData.get(matchId);
+    if (!players) {
+      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      return;
+    }
+    const [nameA, nameB] = interaction.values;
+    const pA = players.find(p => p.name === nameA);
+    const pB = players.find(p => p.name === nameB);
+    if (!pA || !pB) {
+      await interaction.reply({ content: 'Aucune donnée pour ces joueurs.', ephemeral: true });
+      return;
+    }
+
+    const perfScore = p =>
+      (p.score || 0) +
+      (p.goals || 0) * 100 +
+      (p.assists || 0) * 50 +
+      (p.saves || 0) * 50 +
+      (p.shots || 0) * 10 +
+      ((typeof p.rotationQuality === 'number' && p.rotationQuality > 0 ? p.rotationQuality : 0) * 100) -
+      ((p.missedOpenGoals || 0) + (p.doubleCommits || 0) + (p.uselessTouches || 0)) * 20;
+
+    const errorRatio = p => {
+      const errors = (p.missedOpenGoals || 0) + (p.doubleCommits || 0) + (p.uselessTouches || 0);
+      const touches = p.ballTouches || 0;
+      return touches ? ((errors / touches) * 100) : 0;
+    };
+
+    const scoreA = perfScore(pA);
+    const scoreB = perfScore(pB);
+    const better = scoreA === scoreB ?
+      'Impact similaire.' : scoreA > scoreB ?
+      `${pA.name} a été le plus impactant.` : `${pB.name} a été le plus impactant.`;
+
+    const compareEmbed = new EmbedBuilder()
+      .setTitle('🏅 Duel de performance')
+      .setDescription(`${pA.name} vs ${pB.name}`)
+      .addFields(
+        { name: 'Score de performance globale', value: `${scoreA.toFixed(0)} vs ${scoreB.toFixed(0)}` },
+        { name: 'Buts / assists / arrêts', value: `${pA.goals}/${pA.assists}/${pA.saves} vs ${pB.goals}/${pB.assists}/${pB.saves}` },
+        { name: 'Ratio d’erreurs', value: `${errorRatio(pA).toFixed(1)}% vs ${errorRatio(pB).toFixed(1)}%` },
+        { name: 'Utilisation du boost', value: `${(pA.boostFrequency ?? 0).toFixed(2)} vs ${(pB.boostFrequency ?? 0).toFixed(2)}` },
+        { name: 'Rotations & soutien', value: `Rot: ${Math.round((pA.rotationQuality ?? 0) * 100)}/100 | Passes: ${pA.usefulPasses ?? 0} vs Rot: ${Math.round((pB.rotationQuality ?? 0) * 100)}/100 | Passes: ${pB.usefulPasses ?? 0}` },
+        { name: 'Conclusion', value: better }
+      )
+      .setColor('#800080')
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [compareEmbed], ephemeral: true });
   }
 });
 
