@@ -23,6 +23,29 @@ let channelId = '';
 const matchData = new Map();
 setupMatchmaking(client);
 
+const calculateMotm = players => {
+  let best = null;
+  let bestVal = -Infinity;
+  for (const p of players) {
+    const rotation =
+      typeof p.rotationQuality === 'number' && p.rotationQuality > 0
+        ? p.rotationQuality
+        : 0;
+    const val =
+      (p.score || 0) +
+      (p.goals || 0) * 100 +
+      (p.assists || 0) * 50 +
+      (p.saves || 0) * 50 +
+      (p.shots || 0) * 10 +
+      rotation * 100;
+    if (val > bestVal) {
+      bestVal = val;
+      best = p;
+    }
+  }
+  return { player: best, value: bestVal };
+};
+
 const sum = (arr, field) => arr.reduce((acc, p) => acc + (p[field] || 0), 0);
 const rotationScore = arr => {
   const valid = arr.filter(p => typeof p.rotationQuality === 'number' && p.rotationQuality > 0);
