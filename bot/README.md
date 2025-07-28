@@ -16,12 +16,15 @@ npm install
 
 ## Lancement
 
+Le bot lit automatiquement les variables définies dans un fichier `.env` à la racine du dossier.
+
 ```bash
-DISCORD_TOKEN=VOTRE_TOKEN node index.js
+node index.js
 ```
 
 Au premier lancement, le bot enregistre automatiquement la commande slash
 `/setchannel`. Utilisez-la dans le salon souhaité pour que les scores y soient
-publiés.
+publiés. Ce choix est désormais mémorisé dans un fichier `channel.json`,
+permettant de conserver le même salon même après un redémarrage du bot.
 
 Le bot reçoit désormais des informations détaillées sur la partie (buteurs, passes décisives, tirs cadrés, MVP, scores individuels, arrêts et vrais noms d'équipe) et les présente sous forme de message formaté dans le salon configuré.
