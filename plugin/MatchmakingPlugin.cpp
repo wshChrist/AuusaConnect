@@ -4,6 +4,8 @@
 #include <nlohmann/json.hpp>
 #include <vector>
 #include <string>
+#include <map>
+#include <cmath>
 
 using json = nlohmann::json;
 
@@ -57,6 +59,7 @@ private:
     void TickStats();
     void OnHitBall(CarWrapper car, void* params, std::string eventName);
     void OnCarDemolish(CarWrapper car, void* params, std::string eventName);
+    void OnBoostCollected(BoostWrapper boost, void* params, std::string eventName);
     void OnGameEnd();
     void OnGoalScored(std::string eventName);
 
@@ -68,6 +71,7 @@ private:
     Vector lastBallLocation{0.f, 0.f, 0.f};
     Vector lastBallVel;
     float lastUpdate = 0.f;
+    bool debugEnabled = false;
 };
 
 static PriWrapper GetPriByName(ServerWrapper server, const std::string& name)
@@ -92,6 +96,10 @@ static bool WasLastShotOnGoal(const BallWrapper& ball)
 
 void MatchmakingPlugin::onLoad()
 {
+    cvarManager->registerCvar("mm_debug", "0", "Active le mode debug").addOnValueChanged([this](std::string, CVarWrapper cvar){
+        debugEnabled = cvar.getBoolValue();
+    });
+    debugEnabled = cvarManager->getCvar("mm_debug").getBoolValue();
     HookEvents();
 }
 
@@ -116,6 +124,11 @@ void MatchmakingPlugin::HookEvents()
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
         "Function TAGame.Car_TA.EventDemolish",
         std::bind(&MatchmakingPlugin::OnCarDemolish, this,
+                  std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+
+    gameWrapper->HookEventWithCallerPost<BoostWrapper>(
+        "Function TAGame.CarComponent_Boost_TA.OnPickup",
+        std::bind(&MatchmakingPlugin::OnBoostCollected, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
     gameWrapper->HookEventPost(
@@ -224,6 +237,19 @@ void MatchmakingPlugin::OnGameEnd()
     if (!sw)
         return;
 
+    if (gameWrapper->IsInFreeplay())
+    {
+        cvarManager->log("Statistiques non generees : session freeplay");
+        return;
+    }
+
+    ArrayWrapper<PriWrapper> prisCheck = sw.GetPRIs();
+    if (prisCheck.Count() < 2)
+    {
+        cvarManager->log("Statistiques non generees : nombre de joueurs insuffisant pour analyser un match.");
+        return;
+    }
+
     TeamWrapper blueTeam = sw.GetTeams().Get(0);
     TeamWrapper orangeTeam = sw.GetTeams().Get(1);
 
@@ -290,6 +316,9 @@ void MatchmakingPlugin::OnGameEnd()
         {"players", players}
     };
 
+    if (debugEnabled)
+        cvarManager->log("[DEBUG] Envoi des stats : " + std::to_string(players.size()) + " joueurs");
+
     cpr::Response r = cpr::Post(cpr::Url{"http://localhost:3000/match"},
                                 cpr::Body{payload.dump()},
                                 cpr::Header{{"Content-Type", "application/json"}});
@@ -322,18 +351,46 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
     Vector ballVel = ball.GetVelocity();
     int team = pri.GetTeamNum2();
 
-    // degagement : balle envoyee de sa moitie vers l'adversaire
-    if ((team == 0 && pos.Y < 0 && ballPos.Y > 0) || (team == 1 && pos.Y > 0 && ballPos.Y < 0))
+    bool wasDef = (team == 0) ? lastBallLocation.Y < -2000.f : lastBallLocation.Y > 2000.f;
+    bool nowOff = (team == 0) ? ballPos.Y > 0.f : ballPos.Y < 0.f;
+    if (wasDef && nowOff)
+    {
         ps.clearances++;
+        if (debugEnabled)
+            cvarManager->log("[DEBUG] Degagement par " + name);
+    }
 
-    // duel gagne dans sa moitie
-    if ((team == 0 && pos.Y < 0) || (team == 1 && pos.Y > 0))
+    bool oppNearby = false;
+    for (int i = 0; i < pris.Count(); ++i)
+    {
+        PriWrapper opp = pris.Get(i);
+        if (!opp || opp.GetTeamNum2() == team)
+            continue;
+        CarWrapper oc = opp.GetCar();
+        if (!oc)
+            continue;
+        if ((oc.GetLocation() - ballPos).magnitude() < 800.f)
+        {
+            oppNearby = true;
+            break;
+        }
+    }
+    float oppTouch = fabs(sw.GetSecondsElapsed() - lastTeamTouchTime[team == 0 ? 1 : 0]);
+    if (oppNearby && oppTouch < 0.2f)
+    {
         ps.challengesWon++;
+        if (debugEnabled)
+            cvarManager->log("[DEBUG] Duel gagne par " + name);
+    }
 
     // block si la balle allait vers le but et repart a l'oppose
     if ((team == 0 && lastBallVel.Y < 0 && ballVel.Y >= 0 && pos.Y < 0) ||
         (team == 1 && lastBallVel.Y > 0 && ballVel.Y <= 0 && pos.Y > 0))
+    {
         ps.blocks++;
+        if (debugEnabled)
+            cvarManager->log("[DEBUG] Block par " + name);
+    }
 
     float gameTime = sw.GetSecondsElapsed();
 
@@ -430,6 +487,11 @@ void MatchmakingPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::str
     {
         PlayerStats &ps = stats[pri.GetPlayerName().ToString()];
         ps.defensiveDemos++;
+        if (debugEnabled)
+        {
+            float time = gameWrapper->GetCurrentGameState().GetSecondsElapsed();
+            cvarManager->log("[DEBUG] Demo defensive par " + pri.GetPlayerName().ToString() + " t:" + std::to_string(time));
+        }
     }
 
     // Identifie le démolisseur via le champ Attacker du CarWrapper
@@ -442,8 +504,37 @@ void MatchmakingPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::str
             Vector aloc = ac.GetLocation();
             int aTeam = attacker.GetTeamNum2();
             if ((aTeam == 0 && aloc.X > 0) || (aTeam == 1 && aloc.X < 0))
+            {
                 stats[attacker.GetPlayerName().ToString()].offensiveDemos++;
+                if (debugEnabled)
+                    cvarManager->log("[DEBUG] Demo offensive par " + attacker.GetPlayerName().ToString());
+            }
         }
+    }
+}
+
+void MatchmakingPlugin::OnBoostCollected(BoostWrapper boost, void* /*params*/, std::string)
+{
+    if (!boost)
+        return;
+
+    CarWrapper car = boost.GetCar();
+    if (!car)
+        return;
+
+    PriWrapper pri = car.GetPRI();
+    if (!pri)
+        return;
+
+    std::string name = pri.GetPlayerName().ToString();
+    PlayerStats &ps = stats[name];
+    ps.boostPickups++;
+
+    if (debugEnabled)
+    {
+        Vector loc = car.GetLocation();
+        float time = gameWrapper->GetCurrentGameState().GetSecondsElapsed();
+        cvarManager->log("[DEBUG] Boost pickup " + name + " pos:" + std::to_string(loc.X) + "," + std::to_string(loc.Y) + " t:" + std::to_string(time));
     }
 }
 
@@ -466,6 +557,12 @@ void MatchmakingPlugin::OnGoalScored(std::string)
 
     std::string name = lastTouchPlayer;
     stats[name].goals++;
+
+    if (debugEnabled)
+    {
+        float time = sw.GetSecondsElapsed();
+        cvarManager->log("[DEBUG] But marque par " + name + " t:" + std::to_string(time));
+    }
 
     int team = scorer.GetTeamNum2();
     std::string assister = lastTeamTouchPlayer[team];
