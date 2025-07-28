@@ -7,6 +7,10 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder
 } from 'discord.js';
+import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { setupMatchmaking } from './matchmaking.js';
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -14,12 +18,21 @@ import bodyParser from 'body-parser';
 const app = express();
 app.use(bodyParser.json());
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CHANNEL_FILE = path.join(__dirname, 'channel.json');
+let channelId = '';
+try {
+  const data = JSON.parse(fs.readFileSync(CHANNEL_FILE, 'utf8'));
+  if (data.channelId) channelId = data.channelId;
+} catch {
+  channelId = '';
+}
+
 const client = new Client({ intents: [
   GatewayIntentBits.Guilds,
   GatewayIntentBits.GuildMessages,
   GatewayIntentBits.GuildVoiceStates
 ] });
-let channelId = '';
 const matchData = new Map();
 setupMatchmaking(client);
 
@@ -162,6 +175,11 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand()) {
     if (interaction.commandName === 'setchannel') {
       channelId = interaction.channelId;
+      try {
+        fs.writeFileSync(CHANNEL_FILE, JSON.stringify({ channelId }));
+      } catch (err) {
+        console.error('Impossible de sauvegarder le canal :', err);
+      }
       await interaction.reply('Canal enregistré pour les résultats de match.');
     }
     return;
