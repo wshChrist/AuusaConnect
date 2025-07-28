@@ -17,6 +17,43 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 let channelId = '';
 const matchData = new Map();
 
+const sum = (arr, field) => arr.reduce((acc, p) => acc + (p[field] || 0), 0);
+const rotationScore = arr => {
+  const valid = arr.filter(p => typeof p.rotationQuality === 'number' && p.rotationQuality > 0);
+  if (!valid.length) return 0;
+  const avg = valid.reduce((acc, p) => acc + p.rotationQuality, 0) / valid.length;
+  return Math.round(avg * 100);
+};
+
+const analyzeTeam = arr => {
+  const s = field => arr.reduce((a, p) => a + (p[field] || 0), 0);
+  const note = Math.max(0, Math.min(100, rotationScore(arr) - (s('doubleCommits') || 0) * 5 + (s('goals') || 0) * 2));
+  let comment = 'Équipe désorganisée';
+  if (note >= 80) comment = 'Excellente cohésion et rotations fluides';
+  else if (note >= 60) comment = 'Bonne cohésion mais trop de double commits';
+  else if (note >= 40) comment = 'Cohésion moyenne et défense perfectible';
+
+  const forces = [];
+  if (rotationScore(arr) > 70) forces.push('bonne rotation');
+  if (s('cleanClears') > arr.length) forces.push('relances propres');
+  if (s('highPressings') >= arr.length) forces.push('engagement constant');
+  if (s('saves') >= arr.length) forces.push('bonne couverture défensive');
+
+  const faiblesses = [];
+  if ((s('doubleCommits') || 0) > arr.length / 2) faiblesses.push('trop de double commits');
+  if ((s('wastedBoostPickups') || 0) > (s('boostPickups') || 1) / 2) faiblesses.push('boost mal géré');
+  if ((s('missedOpenGoals') || 0) > 0) faiblesses.push('open nets manqués');
+  if ((s('defensiveChallenges') || 0) < arr.length) faiblesses.push('mauvaise couverture défensive');
+
+  const reco = [];
+  if (rotationScore(arr) < 70) reco.push('Travaillez vos rotations en scrim');
+  if ((s('doubleCommits') || 0) > arr.length / 2) reco.push('Communiquez plus pour éviter les double commits');
+  if ((s('wastedBoostPickups') || 0) > (s('boostPickups') || 1) / 2) reco.push('Optimisez la prise de boost');
+  if ((s('defensiveChallenges') || 0) < arr.length) reco.push('Renforcez la défense ensemble');
+
+  return { note, comment, forces, faiblesses, reco };
+};
+
 app.post('/match', async (req, res) => {
   const {
     scoreBlue,
@@ -32,13 +69,6 @@ app.post('/match', async (req, res) => {
 
     const bluePlayers = players.filter(p => p.team === 0);
     const orangePlayers = players.filter(p => p.team === 1);
-    const sum = (arr, field) => arr.reduce((acc, p) => acc + (p[field] || 0), 0);
-    const rotationScore = arr => {
-      const valid = arr.filter(p => typeof p.rotationQuality === 'number' && p.rotationQuality > 0);
-      if (!valid.length) return 0;
-      const avg = valid.reduce((acc, p) => acc + p.rotationQuality, 0) / valid.length;
-      return Math.round(avg * 100);
-    };
 
     const motm = () => {
       let best = null;
@@ -94,7 +124,13 @@ app.post('/match', async (req, res) => {
       .setCustomId('details_joueur')
       .setLabel('📊 Détails Joueurs')
       .setStyle(ButtonStyle.Primary);
-    const row = new ActionRowBuilder().addComponents(btn);
+
+    const teamBtn = new ButtonBuilder()
+      .setCustomId('team_analysis_button')
+      .setLabel('🧠 Analyse de la team')
+      .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder().addComponents(btn, teamBtn);
 
     const message = await channel.send({ embeds: [embed], components: [row] });
     matchData.set(message.id, players);
@@ -145,6 +181,34 @@ client.on('interactionCreate', async interaction => {
       components: [new ActionRowBuilder().addComponents(select)],
       ephemeral: true
     });
+    return;
+  }
+
+  if (interaction.isButton() && interaction.customId === 'team_analysis_button') {
+    const players = matchData.get(interaction.message.id);
+    if (!players) {
+      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      return;
+    }
+    const username = (interaction.member?.nickname || interaction.user.username).toLowerCase();
+    const player = players.find(p => p.name.toLowerCase() === username);
+    if (!player) {
+      await interaction.reply({ content: "Impossible de déterminer ton équipe.", ephemeral: true });
+      return;
+    }
+    const teamPlayers = players.filter(p => p.team === player.team);
+    const analysis = analyzeTeam(teamPlayers);
+    const analysisEmbed = new EmbedBuilder()
+      .setTitle('🧠 Analyse tactique de ton équipe')
+      .addFields(
+        { name: 'Note collective', value: `${analysis.note}/100 - ${analysis.comment}` },
+        { name: 'Forces', value: analysis.forces.length ? `• ${analysis.forces.join('\n• ')}` : 'Aucune' },
+        { name: 'Faiblesses', value: analysis.faiblesses.length ? `• ${analysis.faiblesses.join('\n• ')}` : 'Aucune' },
+        { name: 'Recommandations', value: analysis.reco.length ? `• ${analysis.reco.join('\n• ')}` : 'Aucune' }
+      )
+      .setColor('#00BFFF')
+      .setTimestamp();
+    await interaction.reply({ embeds: [analysisEmbed], ephemeral: true });
     return;
   }
 
