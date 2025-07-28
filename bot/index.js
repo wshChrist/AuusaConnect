@@ -136,7 +136,7 @@ app.post('/match', async (req, res) => {
       .setLabel('🧠 Analyse de la team')
       .setStyle(ButtonStyle.Secondary);
 
-    const row = new ActionRowBuilder().addComponents(btn, teamBtn);
+    const row = new ActionRowBuilder().addComponents(btnDetails, teamBtn);
 
     const message = await channel.send({ embeds: [embed], components: [row] });
     matchData.set(message.id, players);
