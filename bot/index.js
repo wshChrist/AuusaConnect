@@ -139,7 +139,7 @@ app.post('/match', async (req, res) => {
       .setFooter({ text: 'Auusa.gg' })
       .setTimestamp();
 
-    const btnDetails = new ButtonBuilder()
+    const btn = new ButtonBuilder()
       .setCustomId('details_joueur')
       .setLabel('📊 Détails Joueurs')
       .setStyle(ButtonStyle.Primary);
@@ -149,7 +149,7 @@ app.post('/match', async (req, res) => {
       .setLabel('🧠 Analyse de la team')
       .setStyle(ButtonStyle.Secondary);
 
-    const row = new ActionRowBuilder().addComponents(btnDetails, teamBtn);
+    const row = new ActionRowBuilder().addComponents(btn, teamBtn);
 
     const message = await channel.send({ embeds: [embed], components: [row] });
     matchData.set(message.id, players);
