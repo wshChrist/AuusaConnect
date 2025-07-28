@@ -17,38 +17,41 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 let channelId = '';
 const matchData = new Map();
 
-const calculateMotm = players => {
-  let best = null;
-  let bestVal = -Infinity;
-  for (const p of players) {
-    const rotation =
-      typeof p.rotationQuality === 'number' && p.rotationQuality > 0
-        ? p.rotationQuality
-        : 0;
-    const val =
-      (p.score || 0) +
-      (p.goals || 0) * 100 +
-      (p.assists || 0) * 50 +
-      (p.saves || 0) * 50 +
-      (p.shots || 0) * 10 +
-      rotation * 100;
-    if (val > bestVal) {
-      bestVal = val;
-      best = p;
-    }
-  }
-  return { player: best, value: bestVal };
+const sum = (arr, field) => arr.reduce((acc, p) => acc + (p[field] || 0), 0);
+const rotationScore = arr => {
+  const valid = arr.filter(p => typeof p.rotationQuality === 'number' && p.rotationQuality > 0);
+  if (!valid.length) return 0;
+  const avg = valid.reduce((acc, p) => acc + p.rotationQuality, 0) / valid.length;
+  return Math.round(avg * 100);
 };
 
-const motmComment = player => {
-  const remarks = [];
-  if ((player.goals || 0) >= 3) remarks.push('machine à buts');
-  if ((player.saves || 0) >= 5) remarks.push('mur défensif');
-  if ((player.assists || 0) >= 3) remarks.push('passeur hors pair');
-  if ((player.rotationQuality || 0) > 0.8) remarks.push('rotations impeccables');
-  if (!remarks.length)
-    return "Un jeu propre et intelligent, décisif sur tous les fronts.";
-  return `Un ${remarks.join(' et ')}, bravo !`;
+const analyzeTeam = arr => {
+  const s = field => arr.reduce((a, p) => a + (p[field] || 0), 0);
+  const note = Math.max(0, Math.min(100, rotationScore(arr) - (s('doubleCommits') || 0) * 5 + (s('goals') || 0) * 2));
+  let comment = 'Équipe désorganisée';
+  if (note >= 80) comment = 'Excellente cohésion et rotations fluides';
+  else if (note >= 60) comment = 'Bonne cohésion mais trop de double commits';
+  else if (note >= 40) comment = 'Cohésion moyenne et défense perfectible';
+
+  const forces = [];
+  if (rotationScore(arr) > 70) forces.push('bonne rotation');
+  if (s('cleanClears') > arr.length) forces.push('relances propres');
+  if (s('highPressings') >= arr.length) forces.push('engagement constant');
+  if (s('saves') >= arr.length) forces.push('bonne couverture défensive');
+
+  const faiblesses = [];
+  if ((s('doubleCommits') || 0) > arr.length / 2) faiblesses.push('trop de double commits');
+  if ((s('wastedBoostPickups') || 0) > (s('boostPickups') || 1) / 2) faiblesses.push('boost mal géré');
+  if ((s('missedOpenGoals') || 0) > 0) faiblesses.push('open nets manqués');
+  if ((s('defensiveChallenges') || 0) < arr.length) faiblesses.push('mauvaise couverture défensive');
+
+  const reco = [];
+  if (rotationScore(arr) < 70) reco.push('Travaillez vos rotations en scrim');
+  if ((s('doubleCommits') || 0) > arr.length / 2) reco.push('Communiquez plus pour éviter les double commits');
+  if ((s('wastedBoostPickups') || 0) > (s('boostPickups') || 1) / 2) reco.push('Optimisez la prise de boost');
+  if ((s('defensiveChallenges') || 0) < arr.length) reco.push('Renforcez la défense ensemble');
+
+  return { note, comment, forces, faiblesses, reco };
 };
 
 app.post('/match', async (req, res) => {
@@ -66,13 +69,6 @@ app.post('/match', async (req, res) => {
 
     const bluePlayers = players.filter(p => p.team === 0);
     const orangePlayers = players.filter(p => p.team === 1);
-    const sum = (arr, field) => arr.reduce((acc, p) => acc + (p[field] || 0), 0);
-    const rotationScore = arr => {
-      const valid = arr.filter(p => typeof p.rotationQuality === 'number' && p.rotationQuality > 0);
-      if (!valid.length) return 0;
-      const avg = valid.reduce((acc, p) => acc + p.rotationQuality, 0) / valid.length;
-      return Math.round(avg * 100);
-    };
 
     const { player: motmPlayer } = calculateMotm(players);
 
@@ -106,12 +102,12 @@ app.post('/match', async (req, res) => {
       .setLabel('📊 Détails Joueurs')
       .setStyle(ButtonStyle.Primary);
 
-    const btnMvp = new ButtonBuilder()
-      .setCustomId('mvp_button')
-      .setLabel('👑 Homme du match')
+    const teamBtn = new ButtonBuilder()
+      .setCustomId('team_analysis_button')
+      .setLabel('🧠 Analyse de la team')
       .setStyle(ButtonStyle.Secondary);
 
-    const row = new ActionRowBuilder().addComponents(btnDetails, btnMvp);
+    const row = new ActionRowBuilder().addComponents(btn, teamBtn);
 
     const message = await channel.send({ embeds: [embed], components: [row] });
     matchData.set(message.id, players);
@@ -165,42 +161,31 @@ client.on('interactionCreate', async interaction => {
     return;
   }
 
-  if (interaction.isButton() && interaction.customId === 'mvp_button') {
+  if (interaction.isButton() && interaction.customId === 'team_analysis_button') {
     const players = matchData.get(interaction.message.id);
     if (!players) {
       await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
       return;
     }
-    const { player: motmPlayer, value } = calculateMotm(players);
-    if (!motmPlayer) {
-      await interaction.reply({ content: 'Aucun joueur.', ephemeral: true });
+    const username = (interaction.member?.nickname || interaction.user.username).toLowerCase();
+    const player = players.find(p => p.name.toLowerCase() === username);
+    if (!player) {
+      await interaction.reply({ content: "Impossible de déterminer ton équipe.", ephemeral: true });
       return;
     }
-    const stats = [
-      { n: 'Buts', v: motmPlayer.goals || 0 },
-      { n: 'Passes', v: motmPlayer.assists || 0 },
-      { n: 'Arrêts', v: motmPlayer.saves || 0 },
-      { n: 'Tirs cadrés', v: motmPlayer.shots || 0 },
-      { n: 'Score', v: motmPlayer.score || 0 },
-      { n: 'Rotation', v: Math.round((motmPlayer.rotationQuality || 0) * 100) }
-    ];
-    stats.sort((a, b) => b.v - a.v);
-    const top = stats.slice(0, 3).map((s, i) => `${i + 1}. ${s.n} : ${s.v}`).join('\n');
-
-    const perf = Math.min(100, Math.round(value / 20));
-
-    const embed = new EmbedBuilder()
-      .setColor('#FFD700')
-      .setTitle('👑 Homme du match')
+    const teamPlayers = players.filter(p => p.team === player.team);
+    const analysis = analyzeTeam(teamPlayers);
+    const analysisEmbed = new EmbedBuilder()
+      .setTitle('🧠 Analyse tactique de ton équipe')
       .addFields(
-        { name: 'Joueur', value: motmPlayer.name },
-        { name: 'Score de performance', value: `${perf}/100` },
-        { name: 'Top statistiques', value: top },
-        { name: 'Commentaire', value: motmComment(motmPlayer) }
+        { name: 'Note collective', value: `${analysis.note}/100 - ${analysis.comment}` },
+        { name: 'Forces', value: analysis.forces.length ? `• ${analysis.forces.join('\n• ')}` : 'Aucune' },
+        { name: 'Faiblesses', value: analysis.faiblesses.length ? `• ${analysis.faiblesses.join('\n• ')}` : 'Aucune' },
+        { name: 'Recommandations', value: analysis.reco.length ? `• ${analysis.reco.join('\n• ')}` : 'Aucune' }
       )
+      .setColor('#00BFFF')
       .setTimestamp();
-
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [analysisEmbed], ephemeral: true });
     return;
   }
 
