@@ -293,14 +293,12 @@ void MatchmakingPlugin::OnGameEnd()
             {"defenseTime", ps.defenseTime},
             {"clutchSaves", ps.clutchSaves},
             {"blocks", ps.blocks},
-            {"usefulPasses", ps.usefulPasses},
-            {"cleanClears", ps.cleanClears},
+            {"ballTouches", ps.ballTouches},
+            {"highPressings", ps.highPressings},
+            {"aerialTouches", ps.aerialTouches},
             {"missedOpenGoals", ps.missedOpenGoals},
             {"doubleCommits", ps.doubleCommits},
-            {"uselessTouches", ps.uselessTouches},
-            {"aerialTouches", ps.aerialTouches},
-            {"highPressings", ps.highPressings},
-            {"ballTouches", ps.ballTouches}
+            {"uselessTouches", ps.uselessTouches}
         };
         players.push_back(p);
 
