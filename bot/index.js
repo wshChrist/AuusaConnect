@@ -114,29 +114,54 @@ app.post('/match', async (req, res) => {
 
     const { player: motmPlayer } = calculateMotm(players);
 
+    const motmNote = motmPlayer
+      ? Math.min(10, (motmPlayer.score || 0) / 1000).toFixed(1)
+      : '0';
+
+    const blueClears = sum(bluePlayers, 'clearances');
+    const orangeClears = sum(orangePlayers, 'clearances');
+    const blueDemos =
+      sum(bluePlayers, 'offensiveDemos') + sum(bluePlayers, 'defensiveDemos');
+    const orangeDemos =
+      sum(orangePlayers, 'offensiveDemos') + sum(orangePlayers, 'defensiveDemos');
+
     const embed = new EmbedBuilder()
-      .setTitle(`🏁 Match terminé : ${teamBlue} ${scoreBlue} – ${scoreOrange} ${teamOrange}`)
+      .setTitle('🏁 **Match terminé !**')
+      .setDescription(
+        `**Score final**  \n🔵 ${teamBlue} ${scoreBlue} - ${scoreOrange} ${teamOrange} 🔶`
+      )
       .addFields(
         {
-          name: `🔵 ${teamBlue}`,
-          value: `👤 : ${bluePlayers.map(p => p.name).join(', ')}\n🎯 Tirs : ${sum(bluePlayers, 'shots')}\t⚽ Buts : ${sum(bluePlayers, 'goals')}\t🛡️ Arrêts : ${sum(bluePlayers, 'saves')}\n🔄 Score de rotation : ${rotationScore(bluePlayers)}/100`,
+          name: '**📋 Compositions**',
+          value: `🔵 ${teamBlue} : ${bluePlayers
+            .map(p => p.name)
+            .join(', ')}  \n🔶 ${teamOrange} : ${orangePlayers
+            .map(p => p.name)
+            .join(', ')}`,
           inline: false
         },
         {
-          name: `🟠 ${teamOrange}`,
-      value: `👤 : ${orangePlayers.map(p => p.name).join(', ')}\n🎯 Tirs : ${sum(orangePlayers, 'shots')}\t⚽ Buts : ${sum(orangePlayers, 'goals')}\t🛡️ Arrêts : ${sum(orangePlayers, 'saves')}\n🔄 Score de rotation : ${rotationScore(orangePlayers)}/100`,
-      inline: true
+          name: `👑 **Homme du match** : ${
+            motmPlayer ? motmPlayer.name : 'Aucun'
+          } (${motmPlayer ? motmNote : '0'}/10)`,
+          value: '',
+          inline: false
         },
         {
-          name: '👑 Homme du match :',
-          value: motmPlayer
-            ? `**${motmPlayer.name}** (Buts: ${motmPlayer.goals}, Passes: ${motmPlayer.assists}, Arrêts: ${motmPlayer.saves}, Score: ${motmPlayer.score}, Rotation: ${Math.round((typeof motmPlayer.rotationQuality === 'number' && motmPlayer.rotationQuality > 0 ? motmPlayer.rotationQuality : 0) * 100)}/100)`
-            : 'Aucun',
+          name: '📊 **Stats globales**',
+          value: `• Buts : ${sum(bluePlayers, 'goals')} / ${sum(
+            orangePlayers,
+            'goals'
+          )}  \n• Tirs cadrés : ${sum(bluePlayers, 'shots')} / ${sum(
+            orangePlayers,
+            'shots'
+          )}  \n• Dégagements : ${blueClears} / ${orangeClears}  \n• Démolitions : ${blueDemos} / ${orangeDemos}  \n• Rotation moyenne : ${rotationScore(
+            bluePlayers
+          )} / ${rotationScore(orangePlayers)}`,
           inline: false
         }
       )
       .setColor('#00b0f4')
-      .setFooter({ text: 'Auusa.gg' })
       .setTimestamp();
 
     const btn = new ButtonBuilder()
