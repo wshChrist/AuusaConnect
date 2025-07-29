@@ -25,7 +25,7 @@ Il transmet notamment :
 - le nom du MVP ;
 - pour chaque joueur, son nombre de buts, de passes décisives, de tirs cadrés, d'arrêts et son score.
 - les noms exacts des équipes telles qu'affichées en jeu.
-- pour chaque joueur, des statistiques de boost et un indicateur de qualité de rotation (nombre de ramassages, gaspillage, fréquence d'utilisation et part de petits pads).
+- pour chaque joueur, des statistiques de boost et un indicateur de qualité de rotation évalué à partir de sa position dans la rotation (1er/2ᵉ/3ᵉ homme) tout au long du match.
 - des statistiques défensives détaillées (arrêts, dégagements, challenges gagnés, démolitions, temps passé en défense, sauvetages critiques et blocks).
 
 ## Statistiques défensives
