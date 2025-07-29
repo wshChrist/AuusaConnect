@@ -59,7 +59,7 @@ private:
     void TickStats();
     void OnHitBall(CarWrapper car, void* params, std::string eventName);
     void OnCarDemolish(CarWrapper car, void* params, std::string eventName);
-    void OnBoostCollected(BoostWrapper boost, void* params, std::string eventName);
+    void OnBoostCollected(CarWrapper car, void* params, std::string eventName);
     void OnGameEnd();
     void OnGoalScored(std::string eventName);
 
@@ -126,7 +126,7 @@ void MatchmakingPlugin::HookEvents()
         std::bind(&MatchmakingPlugin::OnCarDemolish, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-    gameWrapper->HookEventWithCallerPost<BoostWrapper>(
+    gameWrapper->HookEventWithCallerPost<CarWrapper>(
         "Function TAGame.CarComponent_Boost_TA.OnPickup",
         std::bind(&MatchmakingPlugin::OnBoostCollected, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
@@ -513,13 +513,13 @@ void MatchmakingPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::str
     }
 }
 
-void MatchmakingPlugin::OnBoostCollected(BoostWrapper boost, void* /*params*/, std::string)
+void MatchmakingPlugin::OnBoostCollected(CarWrapper car, void* /*params*/, std::string)
 {
-    if (!boost)
+    if (!car)
         return;
 
-    CarWrapper car = boost.GetCar();
-    if (!car)
+    BoostWrapper boost = car.GetBoostComponent();
+    if (!boost)
         return;
 
     PriWrapper pri = car.GetPRI();
