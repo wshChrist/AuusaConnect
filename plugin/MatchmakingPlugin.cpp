@@ -160,6 +160,21 @@ void MatchmakingPlugin::OnMatchStart(ServerWrapper server, void* /*params*/, std
     lastTeamTouchPlayer[1].clear();
     lastTeamTouchTime[0] = lastTeamTouchTime[1] = 0.f;
     lastBallLocation = server.GetBall().GetLocation();
+    ArrayWrapper<PriWrapper> pris = server.GetPRIs();
+    for (int i = 0; i < pris.Count(); ++i)
+    {
+        PriWrapper pri = pris.Get(i);
+        if (!pri)
+            continue;
+        CarWrapper car = pri.GetCar();
+        if (!car)
+            continue;
+        BoostWrapper boost = car.GetBoostComponent();
+        if (!boost)
+            continue;
+        stats[pri.GetPlayerName().ToString()].lastBoost = boost.GetCurrentBoostAmount();
+    }
+
     TickStats();
 }
 
@@ -193,11 +208,7 @@ void MatchmakingPlugin::TickStats()
 
             PlayerStats &ps = stats[name];
             if (boost)
-            {
-                // Mise a jour simple de la valeur actuelle pour permettre un suivi correct
-                // dans l'evenement OnBoostCollected sans compter deux fois les pickups.
                 ps.lastBoost = boost.GetCurrentBoostAmount();
-            }
 
             Vector pos = car.GetLocation();
             int team = pri.GetTeamNum2();
@@ -604,14 +615,13 @@ void MatchmakingPlugin::OnBoostCollected(CarWrapper car, void* /*params*/, std::
 
     std::string name = pri.GetPlayerName().ToString();
     PlayerStats &ps = stats[name];
-
+    float prev = ps.lastBoost >= 0.f ? ps.lastBoost : boost.GetCurrentBoostAmount();
     float current = boost.GetCurrentBoostAmount();
-    float gained = ps.lastBoost >= 0.f ? current - ps.lastBoost : 0.f;
-
-    ps.boostPickups++;
-    if (ps.lastBoost >= 0.f && gained > 0.f)
+    float gained = current - prev;
+    if (gained > 1.f)
     {
-        if (ps.lastBoost >= boost.GetMaxBoostAmount() * 0.8f)
+        ps.boostPickups++;
+        if (prev >= boost.GetMaxBoostAmount() * 0.8f)
             ps.wastedBoosts++;
         if (gained > 90.f)
             ps.bigPads++;
