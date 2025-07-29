@@ -37,7 +37,8 @@ Les métriques ci-dessous permettent d'analyser plus finement l'impact défensif
 | **Arrêts** | `GetSaves()` ou interception d'un tir cadré bloqué | En direct pour incrémentation, résumée en fin de match | Tir cadré stoppé dans la moitié défensive | entier |
 | **Dégagements** | Position de la balle frappée depuis sa moitié vers l'adversaire | En direct | Distance parcourue supérieure à un seuil et balle éloignée de la zone dangereuse | entier |
 | **Challenges gagnés** | Événement de contact (`CarWrapper` et `BallWrapper`) dans sa moitié | En direct | Duel remporté (50/50) en zone défensive | entier |
-| **Démolitions défensives** | `OnDemolition()` filtré par position du joueur | En direct | L'adversaire est détruit près de son propre but | entier |
+| **Démolitions défensives** | `OnDemolition()` filtré par position du joueur défenseur | En direct | L'adversaire est démoli dans la moitié défensive du joueur | entier |
+| **Démolitions offensives** | `OnDemolition()` filtré par position du joueur attaquant | En direct | L'adversaire est démoli dans sa propre moitié de terrain | entier |
 | **Temps en défense** | Suivi continu de `CarWrapper.GetLocation()` < ligne médiane | Continu puis somme à la fin | Joueur présent dans sa moitié de terrain | secondes ou pourcentage du temps de jeu |
 | **Sauvetages critiques** | Vérification du nombre de coéquipiers derrière le ballon lors d'un arrêt | En direct | Dernier défenseur entre l'attaquant et le but et tir cadré | entier |
 | **Blocks** | Contact balle adverse + redirection de trajectoire | En direct | Blocage d'un tir ou d'une passe dangereuse | entier |
