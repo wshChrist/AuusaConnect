@@ -6,6 +6,8 @@
 #include <string>
 #include <map>
 #include <cmath>
+#include <algorithm>
+#include <utility>
 
 using json = nlohmann::json;
 
@@ -40,6 +42,16 @@ struct PlayerStats
     int aerialTouches = 0;
     int highPressings = 0;
     int ballTouches = 0;
+
+    // Suivi des roles de rotation
+    float roleTime[3] = {0.f, 0.f, 0.f};
+    int cuts = 0;
+    float aggressiveTime = 0.f;
+    float passiveTime = 0.f;
+    float ballchaseTime = 0.f;
+    int lastRole = -1;
+    float firstStreak = 0.f;
+    float thirdStreak = 0.f;
 
     // Etats internes
     bool inAttack = false;
@@ -166,6 +178,7 @@ void MatchmakingPlugin::TickStats()
 
         ArrayWrapper<PriWrapper> pris = sw.GetPRIs();
         Vector ballLoc = ball.GetLocation();
+        std::vector<std::pair<PriWrapper, float>> teamPlayers[2];
         for (int i = 0; i < pris.Count(); ++i)
         {
             PriWrapper pri = pris.Get(i);
@@ -181,18 +194,9 @@ void MatchmakingPlugin::TickStats()
             PlayerStats &ps = stats[name];
             if (boost)
             {
-                float current = boost.GetCurrentBoostAmount();
-                if (ps.lastBoost >= 0 && current - ps.lastBoost > 1.f)
-                {
-                    ps.boostPickups++;
-                    if (ps.lastBoost >= boost.GetMaxBoostAmount() * 0.8f)
-                        ps.wastedBoosts++;
-                    if (current - ps.lastBoost > 90.f)
-                        ps.bigPads++;
-                    else
-                        ps.smallPads++;
-                }
-                ps.lastBoost = current;
+                // Mise a jour simple de la valeur actuelle pour permettre un suivi correct
+                // dans l'evenement OnBoostCollected sans compter deux fois les pickups.
+                ps.lastBoost = boost.GetCurrentBoostAmount();
             }
 
             Vector pos = car.GetLocation();
@@ -225,6 +229,60 @@ void MatchmakingPlugin::TickStats()
                 }
                 if (lastDef)
                     ps.clutchSaves++;
+            }
+
+            float dist = (pos - ballLoc).magnitude();
+            teamPlayers[team].push_back({pri, dist});
+        }
+
+        for (int t = 0; t < 2; ++t)
+        {
+            auto &vec = teamPlayers[t];
+            std::sort(vec.begin(), vec.end(), [](const auto &a, const auto &b){ return a.second < b.second; });
+            for (size_t j = 0; j < vec.size(); ++j)
+            {
+                PriWrapper pri = vec[j].first;
+                if (!pri)
+                    continue;
+                std::string name = pri.GetPlayerName().ToString();
+                PlayerStats &ps = stats[name];
+
+                int role = static_cast<int>(j) + 1;
+                if (role <= 3)
+                    ps.roleTime[role - 1] += dt;
+
+                ps.timeSinceAttack += dt;
+
+                if (ps.lastRole != -1 && role < ps.lastRole - 1)
+                    ps.cuts++;
+
+                if (role == 1)
+                    ps.firstStreak += dt;
+                else
+                {
+                    if (ps.firstStreak > 5.f)
+                        ps.aggressiveTime += ps.firstStreak;
+                    ps.firstStreak = 0.f;
+                }
+
+                if (role == 3)
+                    ps.thirdStreak += dt;
+                else
+                {
+                    if (ps.thirdStreak > 5.f)
+                        ps.passiveTime += ps.thirdStreak;
+                    ps.thirdStreak = 0.f;
+                }
+
+                if (ps.inAttack)
+                {
+                    if (ps.timeSinceAttack > 3.f && role != 3)
+                        ps.ballchaseTime += dt;
+                    if (role == 3 && ps.timeSinceAttack > 1.f)
+                        ps.inAttack = false;
+                }
+
+                ps.lastRole = role;
             }
         }
     }
@@ -275,6 +333,14 @@ void MatchmakingPlugin::OnGameEnd()
         PlayerStats ps = stats[pname];
         // Utilise directement le temps total de jeu expose par ServerWrapper
         float totalTime = sw.GetTotalGameTimePlayed();
+        float rTotal = ps.roleTime[0] + ps.roleTime[1] + ps.roleTime[2];
+        float ideal = rTotal / 3.f;
+        float diff = rTotal > 0.f ? (fabs(ps.roleTime[0] - ideal) + fabs(ps.roleTime[1] - ideal) + fabs(ps.roleTime[2] - ideal)) / rTotal : 0.f;
+        float scoreRot = 100.f - diff * 40.f - ps.cuts * 5.f
+                         - ps.aggressiveTime * 10.f - ps.passiveTime * 10.f
+                         - ps.ballchaseTime * 15.f;
+        scoreRot = std::clamp(scoreRot, 0.f, 100.f);
+
         json p = {
             {"name", pname},
             {"team", pri.GetTeamNum2()},
@@ -286,7 +352,11 @@ void MatchmakingPlugin::OnGameEnd()
             {"boostPickups", ps.boostPickups},
             {"wastedBoostPickups", ps.wastedBoosts},
             {"boostFrequency", totalTime > 0 ? ps.boostPickups / totalTime : 0},
-            {"rotationQuality", ps.boostPickups > 0 ? (float)ps.smallPads / ps.boostPickups : 0},
+            {"rotationQuality", scoreRot / 100.f},
+            {"role1Frequency", rTotal > 0.f ? ps.roleTime[0] / rTotal : 0.f},
+            {"role2Frequency", rTotal > 0.f ? ps.roleTime[1] / rTotal : 0.f},
+            {"role3Frequency", rTotal > 0.f ? ps.roleTime[2] / rTotal : 0.f},
+            {"cuts", ps.cuts},
             {"clearances", ps.clearances},
             {"defensiveChallenges", ps.challengesWon},
             {"defensiveDemos", ps.defensiveDemos},
@@ -534,7 +604,21 @@ void MatchmakingPlugin::OnBoostCollected(CarWrapper car, void* /*params*/, std::
 
     std::string name = pri.GetPlayerName().ToString();
     PlayerStats &ps = stats[name];
+
+    float current = boost.GetCurrentBoostAmount();
+    float gained = ps.lastBoost >= 0.f ? current - ps.lastBoost : 0.f;
+
     ps.boostPickups++;
+    if (ps.lastBoost >= 0.f && gained > 0.f)
+    {
+        if (ps.lastBoost >= boost.GetMaxBoostAmount() * 0.8f)
+            ps.wastedBoosts++;
+        if (gained > 90.f)
+            ps.bigPads++;
+        else
+            ps.smallPads++;
+    }
+    ps.lastBoost = current;
 
     if (debugEnabled)
     {
