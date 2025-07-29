@@ -568,20 +568,6 @@ void MatchmakingPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::str
     if (!pri)
         return;
 
-    Vector pos = car.GetLocation();
-    int team = pri.GetTeamNum2();
-    if ((team == 0 && pos.Y < 0) || (team == 1 && pos.Y > 0))
-    {
-        PlayerStats &ps = stats[pri.GetPlayerName().ToString()];
-        ps.defensiveDemos++;
-        if (debugEnabled)
-        {
-            float time = gameWrapper->GetCurrentGameState().GetSecondsElapsed();
-            cvarManager->log("[DEBUG] Demo defensive par " + pri.GetPlayerName().ToString() + " t:" + std::to_string(time));
-        }
-    }
-
-    // Identifie le démolisseur via le champ Attacker du CarWrapper
     PriWrapper attacker = car.GetAttackerPRI();
     if (attacker)
     {
@@ -590,7 +576,20 @@ void MatchmakingPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::str
         {
             Vector aloc = ac.GetLocation();
             int aTeam = attacker.GetTeamNum2();
-            if ((aTeam == 0 && aloc.X > 0) || (aTeam == 1 && aloc.X < 0))
+
+            // Demo effectuee dans sa propre moitie -> demolition defensive
+            if ((aTeam == 0 && aloc.Y < 0) || (aTeam == 1 && aloc.Y > 0))
+            {
+                stats[attacker.GetPlayerName().ToString()].defensiveDemos++;
+                if (debugEnabled)
+                {
+                    float time = gameWrapper->GetCurrentGameState().GetSecondsElapsed();
+                    cvarManager->log("[DEBUG] Demo defensive par " + attacker.GetPlayerName().ToString() + " t:" + std::to_string(time));
+                }
+            }
+
+            // Demo effectuee dans la moitie adverse -> demolition offensive
+            if ((aTeam == 0 && aloc.Y > 0) || (aTeam == 1 && aloc.Y < 0))
             {
                 stats[attacker.GetPlayerName().ToString()].offensiveDemos++;
                 if (debugEnabled)
