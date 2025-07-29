@@ -67,6 +67,12 @@ const rotationScore = arr => {
   return Math.round(avg * 100);
 };
 
+const boldIfGreater = (v1, v2) => {
+  if (v1 > v2) return [`**${v1}**`, `${v2}`];
+  if (v2 > v1) return [`${v1}`, `**${v2}**`];
+  return [`${v1}`, `${v2}`];
+};
+
 const analyzeTeam = arr => {
   const s = field => arr.reduce((a, p) => a + (p[field] || 0), 0);
   const note = Math.max(0, Math.min(100, rotationScore(arr) - (s('doubleCommits') || 0) * 5 + (s('goals') || 0) * 2));
@@ -125,6 +131,21 @@ app.post('/match', async (req, res) => {
     const orangeDemos =
       sum(orangePlayers, 'offensiveDemos') + sum(orangePlayers, 'defensiveDemos');
 
+    const [goalsB, goalsO] = boldIfGreater(
+      sum(bluePlayers, 'goals'),
+      sum(orangePlayers, 'goals')
+    );
+    const [shotsB, shotsO] = boldIfGreater(
+      sum(bluePlayers, 'shots'),
+      sum(orangePlayers, 'shots')
+    );
+    const [clearsB, clearsO] = boldIfGreater(blueClears, orangeClears);
+    const [demosB, demosO] = boldIfGreater(blueDemos, orangeDemos);
+    const [rotB, rotO] = boldIfGreater(
+      rotationScore(bluePlayers),
+      rotationScore(orangePlayers)
+    );
+
     const embed = new EmbedBuilder()
       .setTitle('🏁 **Match terminé !**')
       .setDescription(
@@ -149,15 +170,11 @@ app.post('/match', async (req, res) => {
         },
         {
           name: '📊 **Stats globales**',
-          value: `• Buts : ${sum(bluePlayers, 'goals')} / ${sum(
-            orangePlayers,
-            'goals'
-          )}  \n• Tirs cadrés : ${sum(bluePlayers, 'shots')} / ${sum(
-            orangePlayers,
-            'shots'
-          )}  \n• Dégagements : ${blueClears} / ${orangeClears}  \n• Démolitions : ${blueDemos} / ${orangeDemos}  \n• Rotation moyenne : ${rotationScore(
-            bluePlayers
-          )} / ${rotationScore(orangePlayers)}`,
+          value: `• Buts : ${goalsB} / ${goalsO}  \n` +
+            `• Tirs cadrés : ${shotsB} / ${shotsO}  \n` +
+            `• Dégagements : ${clearsB} / ${clearsO}  \n` +
+            `• Démolitions : ${demosB} / ${demosO}  \n` +
+            `• Rotation moyenne : ${rotB} / ${rotO}`,
           inline: false
         }
       )
