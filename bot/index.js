@@ -235,10 +235,6 @@ client.once('ready', async () => {
         }
       ]
     });
-    await client.application.commands.create({
-      name: 'setup',
-      description: 'Installer la vérification dans ce salon'
-    });
   } catch (err) {
     console.error('Erreur lors de la création des commandes :', err);
   }

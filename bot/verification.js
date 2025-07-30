@@ -77,8 +77,23 @@ export async function runVerificationSetup(interaction) {
     unverified = await guild.roles.create({ name: unverifiedName, reason: 'Role non vérifié' }).catch(() => null);
   }
 
-  const msg = await interaction.channel.send('Cliquez sur ✅ pour accéder au serveur.');
-  await msg.react('✅');
+  // Cherche s'il existe déjà un message avec une réaction dans ce salon
+  let msg = null;
+  try {
+    const messages = await interaction.channel.messages.fetch({ limit: 50 });
+    msg = messages.find(m => m.reactions.cache.size > 0) || null;
+  } catch {
+    msg = null;
+  }
+
+  // Sinon crée un nouveau message pour la vérification
+  if (!msg) {
+    msg = await interaction.channel.send('Cliquez sur ✅ pour accéder au serveur.');
+  }
+
+  if (!msg.reactions.cache.has('✅')) {
+    await msg.react('✅');
+  }
 
   fs.writeFileSync(VERIFY_FILE, JSON.stringify({ channelId: interaction.channel.id, messageId: msg.id }));
   await interaction.reply({ content: 'Système de vérification installé.', ephemeral: true });
