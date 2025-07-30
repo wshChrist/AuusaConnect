@@ -29,12 +29,14 @@ Au premier lancement, le bot enregistre automatiquement la commande slash
   match. Le choix est stocké dans `channel.json` afin d'être conservé au
   redémarrage du bot.
 - `/setup verification` — installe la vérification dans le salon courant en
-  créant les rôles **Membre** et **Non vérifié** si nécessaire. Le message de
-  vérification est posté et ses informations sont mémorisées dans
-  `verify.json`.
+  créant les rôles **Membre** et **Non vérifié** si nécessaire. Cette commande
+  accepte en option un rôle déjà présent sur le serveur, qui sera attribué aux
+  membres une fois vérifiés. Le message de vérification est posté et ses
+  informations sont mémorisées dans `verify.json`.
 
 Pour installer la vérification, utilisez la sous‑commande `/setup verification`.
 Cette action crée les rôles **Membre** et **Non vérifié** si besoin, puis cherche s'il existe déjà un message avec une réaction dans ce salon. Si c'est le cas, le message le plus récent est utilisé comme support de vérification et la réaction ✅ y est ajoutée. Sinon, le bot poste un nouveau message de vérification. Les informations sont ensuite enregistrées dans `verify.json`.
+Vous pouvez préciser un rôle existant avec l'option `role` pour qu'il soit attribué après validation, par exemple : `/setup verification role:@Membres`.
 
 Une fois la vérification active, tout nouveau membre se voit attribuer automatiquement le rôle **Non vérifié**. Il devra cliquer sur la réaction pour recevoir le rôle de membre classique.
 

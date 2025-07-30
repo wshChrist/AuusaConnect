@@ -226,7 +226,15 @@ client.once('ready', async () => {
         {
           name: 'verification',
           description: 'Installer la vérification dans ce salon',
-          type: ApplicationCommandOptionType.Subcommand
+          type: ApplicationCommandOptionType.Subcommand,
+          options: [
+            {
+              name: 'role',
+              description: 'Rôle attribué après vérification',
+              type: ApplicationCommandOptionType.Role,
+              required: false
+            }
+          ]
         },
         {
           name: 'channel',
