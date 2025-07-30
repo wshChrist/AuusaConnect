@@ -12,7 +12,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { setupMatchmaking } from './matchmaking.js';
-import { setupVerification } from './verification.js';
+import { setupVerification, runVerificationSetup } from './verification.js';
 import express from 'express';
 import bodyParser from 'body-parser';
 
@@ -212,6 +212,10 @@ client.once('ready', async () => {
       name: 'setchannel',
       description: 'Choisir le salon où publier les scores'
     });
+    await client.application.commands.create({
+      name: 'setup',
+      description: 'Installer la vérification dans ce salon'
+    });
   } catch (err) {
     console.error('Erreur lors de la création des commandes :', err);
   }
@@ -227,6 +231,11 @@ client.on('interactionCreate', async interaction => {
         console.error('Impossible de sauvegarder le canal :', err);
       }
       await interaction.reply('Canal enregistré pour les résultats de match.');
+      return;
+    }
+    if (interaction.commandName === 'setup') {
+      await runVerificationSetup(interaction);
+      return;
     }
     return;
   }
