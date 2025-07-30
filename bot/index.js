@@ -333,33 +333,52 @@ client.on('interactionCreate', async interaction => {
 
     const perf = Math.min(10, ((player.score || 0) / 1000)).toFixed(1);
 
-    const boostEfficiency = (player.boostPickups || 0)
-      ? Math.round(
-          ((player.boostPickups - (player.wastedBoostPickups || 0)) /
-            player.boostPickups) *
-            100
-        )
-      : 0;
-
     const detailEmbed = new EmbedBuilder()
-      .setTitle(`🎖️ **Statistiques de ${player.name}**`)
-      .setDescription(
-        `🏆 Score global : **${perf}/10**\n\n` +
-        `─── 🔥 **Clutch**  \n` +
-        `${player.goals} ⚽  |  ${player.assists} 🎯  |  ${player.shots} 🥅  |  ${player.defensiveChallenges} 🤜\n\n` +
-        `─── 🛡️ **Défense**  \n` +
-        `${player.saves} 🧤  |  ${player.clearances} 🚀  |  ${player.clutchSaves} 🚧\n\n` +
-        `─── 🧠 **Intelligence & Rotation**  \n` +
-        `Rotation : ${Math.round((player.rotationQuality ?? 0) * 100)}/100 🔁  \n` +
-        `Boost : ${boostEfficiency}% ⚡\n\n` +
-        `─── 👁️ **Vision & Soutien**  \n` +
-        `Passes utiles : ${player.usefulPasses ?? 0}  |  Relances : ${player.cleanClears ?? 0}\n\n` +
-        `─── 🕹️ **Activité**  \n` +
-        `Touches : ${player.ballTouches ?? 0} ⚽  |  Aériennes : ${player.aerialTouches ?? 0} ✈️\n\n` +
-        `─── ❌ **Erreurs**  \n` +
-        `DC : ${player.doubleCommits ?? 0} ❗ | Open Miss : ${player.missedOpenGoals ?? 0} 🚫`
+      .setTitle(
+        `🎮 ${player.name} — Équipe ${player.team === 0 ? 'Bleue' : 'Orange'}`
       )
-      .setColor('#00b0f4')
+      .addFields(
+        {
+          name: '⚔️ Offensif',
+          value:
+            `> 🏅 Buts : **${player.goals ?? 0}** \n` +
+            `> 🎯 Passes : **${player.assists ?? 0}** \n` +
+            `> 🚀 xG : **${player.expectedGoals ?? player.shots ?? 0}**`,
+          inline: true
+        },
+        {
+          name: '🛡️ Défensif',
+          value:
+            `> 🧱 Saves : **${player.saves ?? 0}**\n` +
+            `> ⚔️ Duels : **${player.defensiveChallenges ?? 0}**\n` +
+            `> 💥 Démos : **${(player.offensiveDemos ?? 0) + (player.defensiveDemos ?? 0)}**`,
+          inline: true
+        },
+        {
+          name: '🔄 Rotation',
+          value:
+            `> ♻️ Qualité : **${Math.round((player.rotationQuality ?? 0) * 100)}%**\n` +
+            `> ✂️ Cuts : **${player.cuts ?? 0}**`,
+          inline: true
+        },
+        {
+          name: '⚙️ Activité & vision',
+          value:
+            `> 🎯 Open goals ratés : **${player.missedOpenGoals ?? 0}**\n` +
+            `> 📍 Pressing haut : **${player.highPressings ?? 0}**\n` +
+            `> ⛽ Boosts (gaspi) : **${player.boostPickups ?? 0}** (${player.wastedBoostPickups ?? 0})`,
+          inline: true
+        },
+        {
+          name: '🧠 Lecture de jeu & Impact',
+          value:
+            `> 🎭 Style de jeu : **${player.playstyleScore ?? 0}**\n` +
+            `> 💬 Note Auusa : \n> **${player.auusaNote ?? 'Joueur fiable et impliqué'}**`,
+          inline: true
+        }
+      )
+      .setImage('https://i.imgur.com/z3IglH8.png')
+      .setColor('#a47864')
       .setTimestamp();
 
     await interaction.reply({ embeds: [detailEmbed], ephemeral: true });
