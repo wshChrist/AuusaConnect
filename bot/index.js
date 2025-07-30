@@ -6,7 +6,8 @@ import {
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
-  ApplicationCommandOptionType
+  ApplicationCommandOptionType,
+  Partials
 } from 'discord.js';
 import 'dotenv/config';
 import fs from 'fs';
@@ -30,13 +31,16 @@ try {
   channelId = '';
 }
 
-const client = new Client({ intents: [
-  GatewayIntentBits.Guilds,
-  GatewayIntentBits.GuildMessages,
-  GatewayIntentBits.GuildVoiceStates,
-  GatewayIntentBits.GuildMembers,
-  GatewayIntentBits.GuildMessageReactions
-] });
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessageReactions
+  ],
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User]
+});
 const matchData = new Map();
 setupMatchmaking(client);
 setupVerification(client);
@@ -226,7 +230,15 @@ client.once('ready', async () => {
         {
           name: 'verification',
           description: 'Installer la vérification dans ce salon',
-          type: ApplicationCommandOptionType.Subcommand
+          type: ApplicationCommandOptionType.Subcommand,
+          options: [
+            {
+              name: 'role',
+              description: 'Rôle attribué après vérification',
+              type: ApplicationCommandOptionType.Role,
+              required: false
+            }
+          ]
         },
         {
           name: 'channel',
@@ -234,10 +246,6 @@ client.once('ready', async () => {
           type: ApplicationCommandOptionType.Subcommand
         }
       ]
-    });
-    await client.application.commands.create({
-      name: 'setup',
-      description: 'Installer la vérification dans ce salon'
     });
   } catch (err) {
     console.error('Erreur lors de la création des commandes :', err);
