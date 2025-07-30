@@ -42,7 +42,14 @@ export function setupVerification(client) {
 
   client.on('guildMemberAdd', async member => {
     const roleName = process.env.UNVERIFIED_ROLE || 'Non vérifié';
-    const role = member.guild.roles.cache.find(r => r.name === roleName);
+    let role = member.guild.roles.cache.find(r => r.name === roleName);
+    if (!role) {
+      try {
+        role = await member.guild.roles.create({ name: roleName, reason: 'Role non vérifié' });
+      } catch {
+        role = null;
+      }
+    }
     if (role) await member.roles.add(role).catch(() => {});
   });
 

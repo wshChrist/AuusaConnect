@@ -36,4 +36,6 @@ Au premier lancement, le bot enregistre automatiquement la commande slash
 Pour installer la vérification, utilisez la sous‑commande `/setup verification`.
 Cette action crée les rôles **Membre** et **Non vérifié** si besoin, puis cherche s'il existe déjà un message avec une réaction dans ce salon. Si c'est le cas, le message le plus récent est utilisé comme support de vérification et la réaction ✅ y est ajoutée. Sinon, le bot poste un nouveau message de vérification. Les informations sont ensuite enregistrées dans `verify.json`.
 
+Une fois la vérification active, tout nouveau membre se voit attribuer automatiquement le rôle **Non vérifié**. Il devra cliquer sur la réaction pour recevoir le rôle de membre classique.
+
 Le bot reçoit désormais des informations détaillées sur la partie (buteurs, passes décisives, tirs cadrés, MVP, scores individuels, arrêts et vrais noms d'équipe) et les présente sous forme de message formaté dans le salon configuré.
