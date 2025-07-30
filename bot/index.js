@@ -12,6 +12,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { setupMatchmaking } from './matchmaking.js';
+import { setupVerification } from './verification.js';
 import express from 'express';
 import bodyParser from 'body-parser';
 
@@ -31,10 +32,13 @@ try {
 const client = new Client({ intents: [
   GatewayIntentBits.Guilds,
   GatewayIntentBits.GuildMessages,
-  GatewayIntentBits.GuildVoiceStates
+  GatewayIntentBits.GuildVoiceStates,
+  GatewayIntentBits.GuildMembers,
+  GatewayIntentBits.GuildMessageReactions
 ] });
 const matchData = new Map();
 setupMatchmaking(client);
+setupVerification(client);
 
 const calculateMotm = players => {
   let best = null;
