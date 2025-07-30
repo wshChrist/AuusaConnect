@@ -4,6 +4,8 @@
 #include <nlohmann/json.hpp>
 #include <vector>
 #include <string>
+#include <fstream>
+#include <filesystem>
 #include <map>
 #include <cmath>
 #include <algorithm>
@@ -84,6 +86,8 @@ private:
     Vector lastBallVel;
     float lastUpdate = 0.f;
     bool debugEnabled = false;
+    std::ofstream logFile;
+    void Log(const std::string& msg);
 };
 
 static PriWrapper GetPriByName(ServerWrapper server, const std::string& name)
@@ -112,11 +116,17 @@ void MatchmakingPlugin::onLoad()
         debugEnabled = cvar.getBoolValue();
     });
     debugEnabled = cvarManager->getCvar("mm_debug").getBoolValue();
+    std::filesystem::path logPath = gameWrapper->GetDataFolder() / "matchmaking.log";
+    logFile.open(logPath.string(), std::ios::app);
+    Log("Plugin loaded");
     HookEvents();
 }
 
 void MatchmakingPlugin::onUnload()
 {
+    Log("Plugin unloaded");
+    if (logFile.is_open())
+        logFile.close();
 }
 
 void MatchmakingPlugin::HookEvents()
@@ -312,14 +322,14 @@ void MatchmakingPlugin::OnGameEnd()
 
     if (gameWrapper->IsInFreeplay())
     {
-        cvarManager->log("Statistiques non generees : session freeplay");
+        Log("Statistiques non generees : session freeplay");
         return;
     }
 
     ArrayWrapper<PriWrapper> prisCheck = sw.GetPRIs();
     if (prisCheck.Count() < 2)
     {
-        cvarManager->log("Statistiques non generees : nombre de joueurs insuffisant pour analyser un match.");
+        Log("Statistiques non generees : nombre de joueurs insuffisant pour analyser un match.");
         return;
     }
 
@@ -408,7 +418,7 @@ void MatchmakingPlugin::OnGameEnd()
     };
 
     if (debugEnabled)
-        cvarManager->log("[DEBUG] Envoi des stats : " + std::to_string(players.size()) + " joueurs");
+        Log("[DEBUG] Envoi des stats : " + std::to_string(players.size()) + " joueurs");
 
     cpr::Response r = cpr::Post(cpr::Url{"http://localhost:3000/match"},
                                 cpr::Body{payload.dump()},
@@ -448,7 +458,7 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
     {
         ps.clearances++;
         if (debugEnabled)
-            cvarManager->log("[DEBUG] Degagement par " + name);
+            Log("[DEBUG] Degagement par " + name);
     }
 
     bool oppNearby = false;
@@ -471,7 +481,7 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
     {
         ps.challengesWon++;
         if (debugEnabled)
-            cvarManager->log("[DEBUG] Duel gagne par " + name);
+            Log("[DEBUG] Duel gagne par " + name);
     }
 
     // block si la balle allait vers le but et repart a l'oppose
@@ -480,7 +490,7 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
     {
         ps.blocks++;
         if (debugEnabled)
-            cvarManager->log("[DEBUG] Block par " + name);
+            Log("[DEBUG] Block par " + name);
     }
 
     float gameTime = sw.GetSecondsElapsed();
@@ -588,7 +598,7 @@ void MatchmakingPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::str
                 if (debugEnabled)
                 {
                     float time = gameWrapper->GetCurrentGameState().GetSecondsElapsed();
-                    cvarManager->log("[DEBUG] Demo defensive par " + attacker.GetPlayerName().ToString() + " t:" + std::to_string(time));
+                    Log("[DEBUG] Demo defensive par " + attacker.GetPlayerName().ToString() + " t:" + std::to_string(time));
                 }
             }
 
@@ -597,7 +607,7 @@ void MatchmakingPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::str
             {
                 stats[attacker.GetPlayerName().ToString()].offensiveDemos++;
                 if (debugEnabled)
-                    cvarManager->log("[DEBUG] Demo offensive par " + attacker.GetPlayerName().ToString());
+                    Log("[DEBUG] Demo offensive par " + attacker.GetPlayerName().ToString());
             }
         }
     }
@@ -638,7 +648,7 @@ void MatchmakingPlugin::OnBoostCollected(CarWrapper car, void* /*params*/, std::
     {
         Vector loc = car.GetLocation();
         float time = gameWrapper->GetCurrentGameState().GetSecondsElapsed();
-        cvarManager->log("[DEBUG] Boost pickup " + name + " pos:" + std::to_string(loc.X) + "," + std::to_string(loc.Y) + " t:" + std::to_string(time));
+        Log("[DEBUG] Boost pickup " + name + " pos:" + std::to_string(loc.X) + "," + std::to_string(loc.Y) + " t:" + std::to_string(time));
     }
 }
 
@@ -665,13 +675,20 @@ void MatchmakingPlugin::OnGoalScored(std::string)
     if (debugEnabled)
     {
         float time = sw.GetSecondsElapsed();
-        cvarManager->log("[DEBUG] But marque par " + name + " t:" + std::to_string(time));
+        Log("[DEBUG] But marque par " + name + " t:" + std::to_string(time));
     }
 
     int team = scorer.GetTeamNum2();
     std::string assister = lastTeamTouchPlayer[team];
     if (!assister.empty() && assister != name)
         stats[assister].assists++;
+}
+
+void MatchmakingPlugin::Log(const std::string& msg)
+{
+    cvarManager->log(msg);
+    if (logFile.is_open())
+        logFile << msg << std::endl;
 }
 
 
