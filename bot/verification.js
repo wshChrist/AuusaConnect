@@ -6,31 +6,37 @@ export function setupVerification(client) {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const VERIFY_FILE = path.join(__dirname, 'verify.json');
   let verifyMessageId = null;
+  let verifyChannelId = null;
+
+  try {
+    const data = JSON.parse(fs.readFileSync(VERIFY_FILE, 'utf8'));
+    verifyMessageId = data.messageId || null;
+    verifyChannelId = data.channelId || null;
+  } catch {
+    verifyMessageId = null;
+    verifyChannelId = null;
+  }
 
   client.once('ready', async () => {
-    const channelId = process.env.VERIFY_CHANNEL_ID;
-    if (!channelId) return;
-    const channel = await client.channels.fetch(channelId).catch(() => null);
+    if (!verifyChannelId) return;
+    const channel = await client.channels.fetch(verifyChannelId).catch(() => null);
     if (!channel) return;
 
-    try {
-      const data = JSON.parse(fs.readFileSync(VERIFY_FILE, 'utf8'));
-      verifyMessageId = data.messageId;
-    } catch {
+    if (!verifyMessageId) {
       const msg = await channel.send('Cliquez sur ✅ pour accéder au serveur.');
       await msg.react('✅');
       verifyMessageId = msg.id;
-      fs.writeFileSync(VERIFY_FILE, JSON.stringify({ messageId: msg.id }));
-    }
-
-    try {
-      const msg = await channel.messages.fetch(verifyMessageId);
-      if (!msg.reactions.cache.has('✅')) await msg.react('✅');
-    } catch {
-      const msg = await channel.send('Cliquez sur ✅ pour accéder au serveur.');
-      await msg.react('✅');
-      verifyMessageId = msg.id;
-      fs.writeFileSync(VERIFY_FILE, JSON.stringify({ messageId: msg.id }));
+      fs.writeFileSync(VERIFY_FILE, JSON.stringify({ channelId: verifyChannelId, messageId: msg.id }));
+    } else {
+      try {
+        const msg = await channel.messages.fetch(verifyMessageId);
+        if (!msg.reactions.cache.has('✅')) await msg.react('✅');
+      } catch {
+        const msg = await channel.send('Cliquez sur ✅ pour accéder au serveur.');
+        await msg.react('✅');
+        verifyMessageId = msg.id;
+        fs.writeFileSync(VERIFY_FILE, JSON.stringify({ channelId: verifyChannelId, messageId: msg.id }));
+      }
     }
   });
 
@@ -52,4 +58,28 @@ export function setupVerification(client) {
     if (verified) await member.roles.add(verified).catch(() => {});
     if (unverified) await member.roles.remove(unverified).catch(() => {});
   });
+}
+
+
+export async function runVerificationSetup(interaction) {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const VERIFY_FILE = path.join(__dirname, 'verify.json');
+  const guild = interaction.guild;
+  const verifiedName = process.env.VERIFIED_ROLE || 'Membre';
+  const unverifiedName = process.env.UNVERIFIED_ROLE || 'Non vérifié';
+
+  let verified = guild.roles.cache.find(r => r.name === verifiedName);
+  if (!verified) {
+    verified = await guild.roles.create({ name: verifiedName, reason: 'Role vérifié' }).catch(() => null);
+  }
+  let unverified = guild.roles.cache.find(r => r.name === unverifiedName);
+  if (!unverified) {
+    unverified = await guild.roles.create({ name: unverifiedName, reason: 'Role non vérifié' }).catch(() => null);
+  }
+
+  const msg = await interaction.channel.send('Cliquez sur ✅ pour accéder au serveur.');
+  await msg.react('✅');
+
+  fs.writeFileSync(VERIFY_FILE, JSON.stringify({ channelId: interaction.channel.id, messageId: msg.id }));
+  await interaction.reply({ content: 'Système de vérification installé.', ephemeral: true });
 }
