@@ -67,6 +67,12 @@ const rotationScore = arr => {
   return Math.round(avg * 100);
 };
 
+const boldIfGreater = (v1, v2) => {
+  if (v1 > v2) return [`**${v1}**`, `${v2}`];
+  if (v2 > v1) return [`${v1}`, `**${v2}**`];
+  return [`${v1}`, `${v2}`];
+};
+
 const analyzeTeam = arr => {
   const s = field => arr.reduce((a, p) => a + (p[field] || 0), 0);
   const note = Math.max(0, Math.min(100, rotationScore(arr) - (s('doubleCommits') || 0) * 5 + (s('goals') || 0) * 2));
@@ -125,6 +131,21 @@ app.post('/match', async (req, res) => {
     const orangeDemos =
       sum(orangePlayers, 'offensiveDemos') + sum(orangePlayers, 'defensiveDemos');
 
+    const [goalsB, goalsO] = boldIfGreater(
+      sum(bluePlayers, 'goals'),
+      sum(orangePlayers, 'goals')
+    );
+    const [shotsB, shotsO] = boldIfGreater(
+      sum(bluePlayers, 'shots'),
+      sum(orangePlayers, 'shots')
+    );
+    const [clearsB, clearsO] = boldIfGreater(blueClears, orangeClears);
+    const [demosB, demosO] = boldIfGreater(blueDemos, orangeDemos);
+    const [rotB, rotO] = boldIfGreater(
+      rotationScore(bluePlayers),
+      rotationScore(orangePlayers)
+    );
+
     const embed = new EmbedBuilder()
       .setTitle('🏁 **Match terminé !**')
       .setDescription(
@@ -149,15 +170,11 @@ app.post('/match', async (req, res) => {
         },
         {
           name: '📊 **Stats globales**',
-          value: `• Buts : ${sum(bluePlayers, 'goals')} / ${sum(
-            orangePlayers,
-            'goals'
-          )}  \n• Tirs cadrés : ${sum(bluePlayers, 'shots')} / ${sum(
-            orangePlayers,
-            'shots'
-          )}  \n• Dégagements : ${blueClears} / ${orangeClears}  \n• Démolitions : ${blueDemos} / ${orangeDemos}  \n• Rotation moyenne : ${rotationScore(
-            bluePlayers
-          )} / ${rotationScore(orangePlayers)}`,
+          value: `• Buts : ${goalsB} / ${goalsO}  \n` +
+            `• Tirs cadrés : ${shotsB} / ${shotsO}  \n` +
+            `• Dégagements : ${clearsB} / ${clearsO}  \n` +
+            `• Démolitions : ${demosB} / ${demosO}  \n` +
+            `• Rotation moyenne : ${rotB} / ${rotO}`,
           inline: false
         }
       )
@@ -277,18 +294,33 @@ client.on('interactionCreate', async interaction => {
 
     const perf = Math.min(10, ((player.score || 0) / 1000)).toFixed(1);
 
+    const boostEfficiency = (player.boostPickups || 0)
+      ? Math.round(
+          ((player.boostPickups - (player.wastedBoostPickups || 0)) /
+            player.boostPickups) *
+            100
+        )
+      : 0;
+
     const detailEmbed = new EmbedBuilder()
-      .setTitle(`Statistiques de ${player.name}`)
-      .addFields(
-        { name: '🔥 Stats offensives', value: `Buts: ${player.goals}\nPasses: ${player.assists}\nTirs cadrés: ${player.shots}\nDémolitions offensives: ${player.offensiveDemos ?? 0}` },
-        { name: '🛡️ Stats défensives', value: `Arrêts: ${player.saves}\nDégagements: ${player.clearances}\nDuels gagnés: ${player.defensiveChallenges}\nDémolitions défensives: ${player.defensiveDemos}\nTemps en défense: ${Math.round(player.defenseTime)}s\nBlocks: ${player.blocks}\nSauvetages critiques: ${player.clutchSaves}` },
-        { name: '🧠 Intelligence & Rotations', value: `Boosts ramassés: ${player.boostPickups}\nGaspi boosts: ${player.wastedBoostPickups}\nFréquence boost: ${player.boostFrequency?.toFixed(2)}\nQualité rotation: ${Math.round((player.rotationQuality ?? 0) * 100)}/100` },
-        { name: '👁️ Vision & Soutien', value: `Passes utiles: ${player.usefulPasses ?? 0}\nRelances propres: ${player.cleanClears ?? 0}` },
-        { name: '🕹️ Mobilité & Activité', value: `Touches de balle: ${player.ballTouches ?? 0}\nPressings hauts: ${player.highPressings ?? 0}\nTouches aériennes: ${player.aerialTouches ?? 0}` },
-        { name: '❌ Erreurs / Malus', value: `Open nets manqués: ${player.missedOpenGoals ?? 0}\nDouble commits: ${player.doubleCommits ?? 0}\nTouches inutiles: ${player.uselessTouches ?? 0}` }
+      .setTitle(`🎖️ **Statistiques de ${player.name}**`)
+      .setDescription(
+        `🏆 Score global : **${perf}/10**\n\n` +
+        `─── 🔥 **Clutch**  \n` +
+        `${player.goals} ⚽  |  ${player.assists} 🎯  |  ${player.shots} 🥅  |  ${player.defensiveChallenges} 🤜\n\n` +
+        `─── 🛡️ **Défense**  \n` +
+        `${player.saves} 🧤  |  ${player.clearances} 🚀  |  ${player.clutchSaves} 🚧\n\n` +
+        `─── 🧠 **Intelligence & Rotation**  \n` +
+        `Rotation : ${Math.round((player.rotationQuality ?? 0) * 100)}/100 🔁  \n` +
+        `Boost : ${boostEfficiency}% ⚡\n\n` +
+        `─── 👁️ **Vision & Soutien**  \n` +
+        `Passes utiles : ${player.usefulPasses ?? 0}  |  Relances : ${player.cleanClears ?? 0}\n\n` +
+        `─── 🕹️ **Activité**  \n` +
+        `Touches : ${player.ballTouches ?? 0} ⚽  |  Aériennes : ${player.aerialTouches ?? 0} ✈️\n\n` +
+        `─── ❌ **Erreurs**  \n` +
+        `DC : ${player.doubleCommits ?? 0} ❗ | Open Miss : ${player.missedOpenGoals ?? 0} 🚫 | Useless touches : ${player.uselessTouches ?? 0} 🤷`
       )
-      .setFooter({ text: `Score global : ${perf}/10` })
-      .setColor(player.team === 0 ? '#0099ff' : '#ff3300')
+      .setColor('#00b0f4')
       .setTimestamp();
 
     await interaction.reply({ embeds: [detailEmbed], ephemeral: true });
