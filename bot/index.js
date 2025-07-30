@@ -226,7 +226,15 @@ client.once('ready', async () => {
         {
           name: 'verification',
           description: 'Installer la vérification dans ce salon',
-          type: ApplicationCommandOptionType.Subcommand
+          type: ApplicationCommandOptionType.Subcommand,
+          options: [
+            {
+              name: 'role',
+              description: 'Rôle attribué après vérification',
+              type: ApplicationCommandOptionType.Role,
+              required: false
+            }
+          ]
         },
         {
           name: 'channel',
@@ -234,10 +242,6 @@ client.once('ready', async () => {
           type: ApplicationCommandOptionType.Subcommand
         }
       ]
-    });
-    await client.application.commands.create({
-      name: 'setup',
-      description: 'Installer la vérification dans ce salon'
     });
   } catch (err) {
     console.error('Erreur lors de la création des commandes :', err);
