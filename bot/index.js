@@ -5,7 +5,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  StringSelectMenuBuilder
+  StringSelectMenuBuilder,
+  ApplicationCommandOptionType
 } from 'discord.js';
 import 'dotenv/config';
 import fs from 'fs';
@@ -105,6 +106,16 @@ const analyzeTeam = arr => {
 
   return { note, comment, forces, faiblesses, reco };
 };
+
+async function runChannelSetup(interaction) {
+  channelId = interaction.channelId;
+  try {
+    fs.writeFileSync(CHANNEL_FILE, JSON.stringify({ channelId }));
+  } catch (err) {
+    console.error('Impossible de sauvegarder le canal :', err);
+  }
+  await interaction.reply('Canal enregistré pour les résultats de match.');
+}
 
 app.post('/match', async (req, res) => {
   const {
@@ -206,15 +217,23 @@ app.post('/match', async (req, res) => {
 client.once('ready', async () => {
   console.log('Bot prêt');
 
-  // Enregistre la commande slash /setchannel si elle n'existe pas
+  // Enregistre la commande slash /setup avec ses sous-commandes
   try {
     await client.application.commands.create({
-      name: 'setchannel',
-      description: 'Choisir le salon où publier les scores'
-    });
-    await client.application.commands.create({
       name: 'setup',
-      description: 'Installer la vérification dans ce salon'
+      description: 'Configurer le bot',
+      options: [
+        {
+          name: 'verification',
+          description: 'Installer la vérification dans ce salon',
+          type: ApplicationCommandOptionType.Subcommand
+        },
+        {
+          name: 'channel',
+          description: 'Enregistrer ce salon pour les scores',
+          type: ApplicationCommandOptionType.Subcommand
+        }
+      ]
     });
   } catch (err) {
     console.error('Erreur lors de la création des commandes :', err);
@@ -223,18 +242,13 @@ client.once('ready', async () => {
 
 client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === 'setchannel') {
-      channelId = interaction.channelId;
-      try {
-        fs.writeFileSync(CHANNEL_FILE, JSON.stringify({ channelId }));
-      } catch (err) {
-        console.error('Impossible de sauvegarder le canal :', err);
-      }
-      await interaction.reply('Canal enregistré pour les résultats de match.');
-      return;
-    }
     if (interaction.commandName === 'setup') {
-      await runVerificationSetup(interaction);
+      const sub = interaction.options.getSubcommand();
+      if (sub === 'verification') {
+        await runVerificationSetup(interaction);
+      } else if (sub === 'channel') {
+        await runChannelSetup(interaction);
+      }
       return;
     }
     return;
