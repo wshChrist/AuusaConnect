@@ -6,7 +6,8 @@ import {
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
-  ApplicationCommandOptionType
+  ApplicationCommandOptionType,
+  Partials
 } from 'discord.js';
 import 'dotenv/config';
 import fs from 'fs';
@@ -30,13 +31,16 @@ try {
   channelId = '';
 }
 
-const client = new Client({ intents: [
-  GatewayIntentBits.Guilds,
-  GatewayIntentBits.GuildMessages,
-  GatewayIntentBits.GuildVoiceStates,
-  GatewayIntentBits.GuildMembers,
-  GatewayIntentBits.GuildMessageReactions
-] });
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessageReactions
+  ],
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User]
+});
 const matchData = new Map();
 setupMatchmaking(client);
 setupVerification(client);

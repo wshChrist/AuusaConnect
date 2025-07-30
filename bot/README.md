@@ -33,6 +33,8 @@ Au premier lancement, le bot enregistre automatiquement la commande slash
   accepte en option un rôle déjà présent sur le serveur, qui sera attribué aux
   membres une fois vérifiés. Le message de vérification est posté et ses
   informations sont mémorisées dans `verify.json`.
+  Si des réactions existaient déjà sur ce message, tous les utilisateurs ayant
+  réagi obtiennent immédiatement le rôle configuré.
 
 Pour installer la vérification, utilisez la sous‑commande `/setup verification`.
 Cette action crée les rôles **Membre** et **Non vérifié** si besoin, puis cherche s'il existe déjà un message avec une réaction dans ce salon. Si c'est le cas, le message le plus récent est utilisé comme support de vérification et la réaction ✅ y est ajoutée. Sinon, le bot poste un nouveau message de vérification. Les informations sont ensuite enregistrées dans `verify.json`.

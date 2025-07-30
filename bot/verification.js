@@ -2,6 +2,36 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+async function applyRolesFromReactions(message, storedRoleId) {
+  const guild = message.guild;
+  let verified = null;
+  if (storedRoleId) {
+    verified =
+      guild.roles.cache.get(storedRoleId) ||
+      (await guild.roles.fetch(storedRoleId).catch(() => null));
+  }
+  if (!verified) {
+    verified = guild.roles.cache.find(
+      r => r.name === (process.env.VERIFIED_ROLE || 'Membre')
+    );
+  }
+  const unverified = guild.roles.cache.find(
+    r => r.name === (process.env.UNVERIFIED_ROLE || 'Non vérifié')
+  );
+
+  const react = message.reactions.cache.get('✅');
+  if (!react) return;
+  const users = await react.users.fetch();
+  for (const [id, user] of users) {
+    if (user.bot) continue;
+    const member =
+      guild.members.cache.get(id) || (await guild.members.fetch(id).catch(() => null));
+    if (!member) continue;
+    if (verified) await member.roles.add(verified).catch(() => {});
+    if (unverified) await member.roles.remove(unverified).catch(() => {});
+  }
+}
+
 export function setupVerification(client) {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const VERIFY_FILE = path.join(__dirname, 'verify.json');
@@ -20,27 +50,37 @@ export function setupVerification(client) {
     verifyRoleId = null;
   }
 
+
   client.once('ready', async () => {
     if (!verifyChannelId) return;
     const channel = await client.channels.fetch(verifyChannelId).catch(() => null);
     if (!channel) return;
 
+    let msg;
     if (!verifyMessageId) {
-      const msg = await channel.send('Cliquez sur ✅ pour accéder au serveur.');
+      msg = await channel.send('Cliquez sur ✅ pour accéder au serveur.');
       await msg.react('✅');
       verifyMessageId = msg.id;
-      fs.writeFileSync(VERIFY_FILE, JSON.stringify({ channelId: verifyChannelId, messageId: msg.id, roleId: verifyRoleId }));
+      fs.writeFileSync(
+        VERIFY_FILE,
+        JSON.stringify({ channelId: verifyChannelId, messageId: msg.id, roleId: verifyRoleId })
+      );
     } else {
       try {
-        const msg = await channel.messages.fetch(verifyMessageId);
+        msg = await channel.messages.fetch(verifyMessageId);
         if (!msg.reactions.cache.has('✅')) await msg.react('✅');
       } catch {
-        const msg = await channel.send('Cliquez sur ✅ pour accéder au serveur.');
+        msg = await channel.send('Cliquez sur ✅ pour accéder au serveur.');
         await msg.react('✅');
         verifyMessageId = msg.id;
-        fs.writeFileSync(VERIFY_FILE, JSON.stringify({ channelId: verifyChannelId, messageId: msg.id, roleId: verifyRoleId }));
+        fs.writeFileSync(
+          VERIFY_FILE,
+          JSON.stringify({ channelId: verifyChannelId, messageId: msg.id, roleId: verifyRoleId })
+        );
       }
     }
+
+    if (msg) await applyRolesFromReactions(msg, verifyRoleId);
   });
 
   client.on('guildMemberAdd', async member => {
@@ -111,6 +151,8 @@ export async function runVerificationSetup(interaction) {
   if (!msg.reactions.cache.has('✅')) {
     await msg.react('✅');
   }
+
+  await applyRolesFromReactions(msg, verified ? verified.id : null);
 
   fs.writeFileSync(VERIFY_FILE, JSON.stringify({ channelId: interaction.channel.id, messageId: msg.id, roleId: verified ? verified.id : null }));
   await interaction.reply({ content: 'Système de vérification installé.', ephemeral: true });
