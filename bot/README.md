@@ -33,8 +33,8 @@ Au premier lancement, le bot enregistre automatiquement la commande slash
   vérification est posté et ses informations sont mémorisées dans
   `verify.json`.
 
-La commande `/setup` installe la vérification dans le salon actuel. Elle crée
-les rôles **Membre** et **Non vérifié** si besoin, poste le message de
-vérification et enregistre ces informations dans `verify.json`.
+Pour installer la vérification, utilisez la sous‑commande `/setup verification`.
+Cette action crée les rôles **Membre** et **Non vérifié** si besoin, poste le
+message de vérification puis enregistre ces informations dans `verify.json`.
 
 Le bot reçoit désormais des informations détaillées sur la partie (buteurs, passes décisives, tirs cadrés, MVP, scores individuels, arrêts et vrais noms d'équipe) et les présente sous forme de message formaté dans le salon configuré.
