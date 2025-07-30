@@ -40,7 +40,6 @@ struct PlayerStats
     int cleanClears = 0;
     int missedOpenGoals = 0;
     int doubleCommits = 0;
-    int uselessTouches = 0;
     int aerialTouches = 0;
     int highPressings = 0;
     int ballTouches = 0;
@@ -361,9 +360,12 @@ void MatchmakingPlugin::OnGameEnd()
         float rTotal = ps.roleTime[0] + ps.roleTime[1] + ps.roleTime[2];
         float ideal = rTotal / 3.f;
         float diff = rTotal > 0.f ? (fabs(ps.roleTime[0] - ideal) + fabs(ps.roleTime[1] - ideal) + fabs(ps.roleTime[2] - ideal)) / rTotal : 0.f;
+        float defenseRatio = totalTime > 0.f ? ps.defenseTime / totalTime : 0.f;
         float scoreRot = 100.f - diff * 40.f - ps.cuts * 5.f
                          - ps.aggressiveTime * 10.f - ps.passiveTime * 10.f
-                         - ps.ballchaseTime * 15.f;
+                         - ps.ballchaseTime * 15.f
+                         - ps.doubleCommits * 3.f
+                         - fabs(defenseRatio - 0.5f) * 30.f;
         scoreRot = std::clamp(scoreRot, 0.f, 100.f);
 
         json p = {
@@ -392,8 +394,7 @@ void MatchmakingPlugin::OnGameEnd()
             {"highPressings", ps.highPressings},
             {"aerialTouches", ps.aerialTouches},
             {"missedOpenGoals", ps.missedOpenGoals},
-            {"doubleCommits", ps.doubleCommits},
-            {"uselessTouches", ps.uselessTouches}
+            {"doubleCommits", ps.doubleCommits}
         };
         players.push_back(p);
 
@@ -561,9 +562,6 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
     }
 
     Vector ballLoc = ball.GetLocation();
-    if ((team == 0 && ballLoc.X < lastBallLocation.X) ||
-        (team == 1 && ballLoc.X > lastBallLocation.X))
-        ps.uselessTouches++;
     lastBallLocation = ballLoc;
 
     if (!car.AnyWheelTouchingGround())

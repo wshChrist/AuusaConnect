@@ -357,7 +357,7 @@ client.on('interactionCreate', async interaction => {
         `─── 🕹️ **Activité**  \n` +
         `Touches : ${player.ballTouches ?? 0} ⚽  |  Aériennes : ${player.aerialTouches ?? 0} ✈️\n\n` +
         `─── ❌ **Erreurs**  \n` +
-        `DC : ${player.doubleCommits ?? 0} ❗ | Open Miss : ${player.missedOpenGoals ?? 0} 🚫 | Useless touches : ${player.uselessTouches ?? 0} 🤷`
+        `DC : ${player.doubleCommits ?? 0} ❗ | Open Miss : ${player.missedOpenGoals ?? 0} 🚫`
       )
       .setColor('#00b0f4')
       .setTimestamp();
@@ -388,10 +388,10 @@ client.on('interactionCreate', async interaction => {
       (p.saves || 0) * 50 +
       (p.shots || 0) * 10 +
       ((typeof p.rotationQuality === 'number' && p.rotationQuality > 0 ? p.rotationQuality : 0) * 100) -
-      ((p.missedOpenGoals || 0) + (p.doubleCommits || 0) + (p.uselessTouches || 0)) * 20;
+      ((p.missedOpenGoals || 0) + (p.doubleCommits || 0)) * 20;
 
     const errorRatio = p => {
-      const errors = (p.missedOpenGoals || 0) + (p.doubleCommits || 0) + (p.uselessTouches || 0);
+      const errors = (p.missedOpenGoals || 0) + (p.doubleCommits || 0);
       const touches = p.ballTouches || 0;
       return touches ? ((errors / touches) * 100) : 0;
     };
