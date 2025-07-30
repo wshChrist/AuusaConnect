@@ -23,9 +23,15 @@ node index.js
 ```
 
 Au premier lancement, le bot enregistre automatiquement la commande slash
-`/setchannel`. Utilisez-la dans le salon souhaité pour que les scores y soient
-publiés. Ce choix est désormais mémorisé dans un fichier `channel.json`,
-permettant de conserver le même salon même après un redémarrage du bot.
+`/setup`. Celle-ci comporte plusieurs sous-commandes :
+
+- `/setup channel` — enregistre le salon actuel pour publier les scores de
+  match. Le choix est stocké dans `channel.json` afin d'être conservé au
+  redémarrage du bot.
+- `/setup verification` — installe la vérification dans le salon courant en
+  créant les rôles **Membre** et **Non vérifié** si nécessaire. Le message de
+  vérification est posté et ses informations sont mémorisées dans
+  `verify.json`.
 
 La commande `/setup` installe la vérification dans le salon actuel. Elle crée
 les rôles **Membre** et **Non vérifié** si besoin, poste le message de
