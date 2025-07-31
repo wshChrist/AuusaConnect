@@ -113,17 +113,37 @@ export function setupTeam(client) {
         const team = await findTeamByUser(interaction.user.id);
         if (!team) return interaction.reply({ content: 'Aucune équipe trouvée.', ephemeral: true });
         const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
-        const list = members.map(m => `<@${m.user_id}>`).join(', ');
+        const list = members.map(m => `> – <@${m.user_id}>`).join('\n');
+        const wins = (await sbRequest('GET', 'match_history', { query: `team_a=eq.${team.id}&winner=eq.${team.id}` })).length;
+        const losses = (await sbRequest('GET', 'match_history', { query: `team_a=eq.${team.id}&winner=neq.${team.id}` })).filter(m => m.winner).length;
+        const ratio = wins + losses ? Math.round((wins / (wins + losses)) * 100) : 0;
+        const lastRows = await sbRequest('GET', 'match_history', { query: `team_a=eq.${team.id}&order=id.desc&limit=1` });
+        let lastField = 'Aucun match enregistré.';
+        if (lastRows.length) {
+          const match = lastRows[0];
+          const opp = await sbRequest('GET', 'teams', { query: `id=eq.${match.team_b}` });
+          const oppName = opp[0]?.name || 'Inconnu';
+          const result = match.winner ? (match.winner === team.id ? 'Victoire' : 'Défaite') : 'Match en attente';
+          lastField = `vs ${oppName} → ${result} ${match.score || ''}`;
+          if (match.date) lastField += ` (${match.date})`;
+        }
+
         const embed = new EmbedBuilder()
-          .setTitle(`🔰 Équipe : ${team.name}`);
-        if (team.description) embed.setDescription(team.description);
+          .setTitle(`📜 Équipe : **${team.name}**`);
+        if (team.description) embed.setDescription(`> ${team.description}`);
         embed
           .addFields(
-            { name: 'Capitaine', value: `<@${team.captain_id}>` },
-            { name: `Membres (${members.length}/6)`, value: list || 'Aucun' },
-            { name: 'Élo', value: `${team.elo}` }
+            { name: '• 👑 Capitaine', value: `> <@${team.captain_id}>`, inline: true },
+            { name: '• 🎓 Coach', value: team.coach_id ? `> <@${team.coach_id}>` : '> –', inline: true },
+            { name: '• 🧾 Manager', value: team.manager_id ? `> <@${team.manager_id}>` : '> –', inline: false },
+            { name: `• 👥 Membres (${members.length}/6)`, value: list || '> – Aucun', inline: true },
+            { name: '📊 Statistiques d’équipe', value: `> 🧠 Élo : ${team.elo}\n> 🏆 Victoires : ${wins}\n> ❌ Défaites : ${losses}\n> 🔄 Ratio de win : ${ratio}%`, inline: true },
+            { name: '• 🏅 Dernier match', value: lastField, inline: false }
           )
-          .setColor('#2ecc71');
+          .setColor('#a47864')
+          .setFooter({ text: 'Auusa.gg - Connecté. Compétitif. Collectif.', iconURL: 'https://i.imgur.com/9FLBUiC.png' })
+          .setTimestamp();
+        embed.setImage(team.logo || 'https://i.imgur.com/HczhXhK.png');
         await interaction.reply({ embeds: [embed] });
       } else if (sub === 'edit') {
         const team = await findTeamByUser(interaction.user.id);
