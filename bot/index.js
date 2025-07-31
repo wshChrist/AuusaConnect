@@ -7,7 +7,8 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder,
   ApplicationCommandOptionType,
-  Partials
+  Partials,
+  MessageFlags
 } from 'discord.js';
 import 'dotenv/config';
 import fs from 'fs';
@@ -273,7 +274,7 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isButton() && interaction.customId === 'details_joueur') {
     const players = matchData.get(interaction.message.id);
     if (!players) {
-      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      await interaction.reply({ content: 'Données indisponibles.', flags: MessageFlags.Ephemeral });
       return;
     }
     const options = players.map(p => ({
@@ -288,7 +289,7 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({
       content: 'Sélectionnez un joueur :',
       components: [new ActionRowBuilder().addComponents(select)],
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
@@ -296,13 +297,13 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isButton() && interaction.customId === 'team_analysis_button') {
     const players = matchData.get(interaction.message.id);
     if (!players) {
-      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      await interaction.reply({ content: 'Données indisponibles.', flags: MessageFlags.Ephemeral });
       return;
     }
     const username = (interaction.member?.nickname || interaction.user.username).toLowerCase();
     const player = players.find(p => p.name.toLowerCase() === username);
     if (!player) {
-      await interaction.reply({ content: "Impossible de déterminer ton équipe.", ephemeral: true });
+      await interaction.reply({ content: "Impossible de déterminer ton équipe.", flags: MessageFlags.Ephemeral });
       return;
     }
     const teamPlayers = players.filter(p => p.team === player.team);
@@ -317,7 +318,7 @@ client.on('interactionCreate', async interaction => {
       )
       .setColor('#00BFFF')
       .setTimestamp();
-    await interaction.reply({ embeds: [analysisEmbed], ephemeral: true });
+    await interaction.reply({ embeds: [analysisEmbed], flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -326,12 +327,12 @@ client.on('interactionCreate', async interaction => {
     const players = matchData.get(matchId);
     const selected = interaction.values[0];
     if (!players) {
-      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      await interaction.reply({ content: 'Données indisponibles.', flags: MessageFlags.Ephemeral });
       return;
     }
     const player = players.find(p => p.name === selected);
     if (!player) {
-      await interaction.reply({ content: 'Aucune donnée pour ce joueur.', ephemeral: true });
+      await interaction.reply({ content: 'Aucune donnée pour ce joueur.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -366,7 +367,7 @@ client.on('interactionCreate', async interaction => {
       .setColor('#00b0f4')
       .setTimestamp();
 
-    await interaction.reply({ embeds: [detailEmbed], ephemeral: true });
+    await interaction.reply({ embeds: [detailEmbed], flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -374,14 +375,14 @@ client.on('interactionCreate', async interaction => {
     const matchId = interaction.customId.replace('select_compare_', '');
     const players = matchData.get(matchId);
     if (!players) {
-      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      await interaction.reply({ content: 'Données indisponibles.', flags: MessageFlags.Ephemeral });
       return;
     }
     const [nameA, nameB] = interaction.values;
     const pA = players.find(p => p.name === nameA);
     const pB = players.find(p => p.name === nameB);
     if (!pA || !pB) {
-      await interaction.reply({ content: 'Aucune donnée pour ces joueurs.', ephemeral: true });
+      await interaction.reply({ content: 'Aucune donnée pour ces joueurs.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -420,7 +421,7 @@ client.on('interactionCreate', async interaction => {
       .setColor('#800080')
       .setTimestamp();
 
-    await interaction.reply({ embeds: [compareEmbed], ephemeral: true });
+    await interaction.reply({ embeds: [compareEmbed], flags: MessageFlags.Ephemeral });
   }
 });
 

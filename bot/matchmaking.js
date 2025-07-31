@@ -4,6 +4,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  MessageFlags,
 } from 'discord.js';
 
 export function setupMatchmaking(client) {
@@ -79,14 +80,14 @@ export function setupMatchmaking(client) {
 
     collector.on('collect', async i => {
       if (!players.some(p => p.id === i.user.id)) {
-        await i.reply({ content: 'Vous ne participez pas à ce match.', ephemeral: true });
+        await i.reply({ content: 'Vous ne participez pas à ce match.', flags: MessageFlags.Ephemeral });
         return;
       }
       if (i.customId === 'ready_yes') {
         ready.add(i.user.id);
-        await i.reply({ content: 'Validé.', ephemeral: true });
+        await i.reply({ content: 'Validé.', flags: MessageFlags.Ephemeral });
       } else {
-        await i.reply({ content: 'Match annulé.', ephemeral: true });
+        await i.reply({ content: 'Match annulé.', flags: MessageFlags.Ephemeral });
         collector.stop('refused:' + i.user.id);
       }
       if (ready.size === players.length) collector.stop('validated');
@@ -123,7 +124,7 @@ export function setupMatchmaking(client) {
     const msg = await text.send({ content: 'Cliquez sur le bouton pour terminer le match.', components: [new ActionRowBuilder().addComponents(btn)] });
     const coll = msg.createMessageComponentCollector({ time: 2 * 60 * 60 * 1000 });
     coll.on('collect', async i => {
-      await i.reply({ content: 'Nettoyage...', ephemeral: true });
+      await i.reply({ content: 'Nettoyage...', flags: MessageFlags.Ephemeral });
       coll.stop();
       await text.delete().catch(() => {});
       await vocal.delete().catch(() => {});
