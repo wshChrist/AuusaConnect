@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 import { setupMatchmaking } from './matchmaking.js';
 import { setupVerification, runVerificationSetup } from './verification.js';
 import { setupTeam } from './team.js';
+import { setupRegistration } from './registration.js';
 import express from 'express';
 import bodyParser from 'body-parser';
 
@@ -46,6 +47,7 @@ const matchData = new Map();
 setupMatchmaking(client);
 setupVerification(client);
 setupTeam(client);
+setupRegistration(client);
 
 const calculateMotm = players => {
   let best = null;
