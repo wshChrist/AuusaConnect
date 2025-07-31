@@ -34,6 +34,8 @@ Les tables suivantes doivent être créées dans votre projet Supabase :
 | `team_id`| `uuid` | référence `teams.id`    |
 | `user_id`| `uuid` | référence `auth.users.id`|
 
+Chaque utilisateur ne peut appartenir qu'à une seule équipe. Une contrainte d'unicité sur `user_id` est donc recommandée pour éviter les doublons dans `team_members`.
+
 ### `team_invitations`
 
 | Colonne  | Type   | Clé étrangère           |

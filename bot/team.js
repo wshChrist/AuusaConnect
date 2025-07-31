@@ -125,6 +125,10 @@ export function setupTeam(client) {
       if (sub === 'create') {
         const name = interaction.options.getString('nom');
         const description = interaction.options.getString('description');
+        const existingTeam = await findTeamByUser(interaction.user.id);
+        if (existingTeam) {
+          return interaction.reply({ content: 'Vous faites déjà partie d\'une équipe.', flags: MessageFlags.Ephemeral });
+        }
         const exists = await sbRequest('GET', 'teams', { query: `name=eq.${encodeURIComponent(name)}` });
         if (exists.length) return interaction.reply({ content: 'Ce nom est déjà pris.', flags: MessageFlags.Ephemeral });
         const team = await sbRequest('POST', 'teams', { body: { name, description, captain_id: interaction.user.id, elo: 1000 } });
@@ -157,6 +161,10 @@ export function setupTeam(client) {
         } catch {}
         await interaction.reply({ content: `${user} a été invité dans **${team.name}**.`, flags: MessageFlags.Ephemeral });
       } else if (sub === 'join') {
+        const memberOf = await findTeamByUser(interaction.user.id);
+        if (memberOf) {
+          return interaction.reply({ content: 'Vous faites déjà partie d\'une équipe.', flags: MessageFlags.Ephemeral });
+        }
         const name = interaction.options.getString('nom');
         const teamRows = await sbRequest('GET', 'teams', { query: `name=eq.${encodeURIComponent(name)}` });
         if (!teamRows.length) return interaction.reply({ content: 'Équipe introuvable.', flags: MessageFlags.Ephemeral });
