@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { MessageFlags } from 'discord.js';
 
 async function applyRolesFromReactions(message, storedRoleId) {
   const guild = message.guild;
@@ -155,5 +156,5 @@ export async function runVerificationSetup(interaction) {
   await applyRolesFromReactions(msg, verified ? verified.id : null);
 
   fs.writeFileSync(VERIFY_FILE, JSON.stringify({ channelId: interaction.channel.id, messageId: msg.id, roleId: verified ? verified.id : null }));
-  await interaction.reply({ content: 'Système de vérification installé.', ephemeral: true });
+  await interaction.reply({ content: 'Système de vérification installé.', flags: MessageFlags.Ephemeral });
 }

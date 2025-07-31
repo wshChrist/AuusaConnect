@@ -1,4 +1,4 @@
-import { ApplicationCommandOptionType, EmbedBuilder } from 'discord.js';
+import { ApplicationCommandOptionType, EmbedBuilder, MessageFlags } from 'discord.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -47,12 +47,12 @@ export function setupRegistration(client) {
     if (!interaction.isChatInputCommand() || interaction.commandName !== 'enregistrement') return;
     const rlName = interaction.options.getString('pseudo').trim();
     const guild = interaction.guild;
-    if (!guild) return interaction.reply({ content: 'Commande uniquement sur un serveur.', ephemeral: true });
+    if (!guild) return interaction.reply({ content: 'Commande uniquement sur un serveur.', flags: MessageFlags.Ephemeral });
 
     try {
       const existing = await sbRequest('GET', 'users', { query: `rl_name=eq.${encodeURIComponent(rlName)}` });
       if (existing.length && existing[0].discord_id !== interaction.user.id) {
-        return interaction.reply({ content: 'Ce pseudo Rocket League est déjà utilisé.', ephemeral: true });
+        return interaction.reply({ content: 'Ce pseudo Rocket League est déjà utilisé.', flags: MessageFlags.Ephemeral });
       }
 
       let userRows = await sbRequest('GET', 'users', { query: `discord_id=eq.${interaction.user.id}` });
@@ -92,7 +92,7 @@ export function setupRegistration(client) {
       await interaction.reply({ embeds: [embed] });
     } catch (err) {
       console.error(err);
-      await interaction.reply({ content: `Erreur : ${err.message}`, ephemeral: true });
+      await interaction.reply({ content: `Erreur : ${err.message}`, flags: MessageFlags.Ephemeral });
     }
   });
 }
