@@ -15,6 +15,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { setupMatchmaking } from './matchmaking.js';
 import { setupVerification, runVerificationSetup } from './verification.js';
+import {
+  setupAdvancedMatchmaking,
+  handleHostConfigCommand,
+  handleMatchEnd,
+  hostConfigCommand
+} from './advancedMatchmaking.js';
 import express from 'express';
 import bodyParser from 'body-parser';
 
@@ -44,6 +50,7 @@ const client = new Client({
 const matchData = new Map();
 setupMatchmaking(client);
 setupVerification(client);
+setupAdvancedMatchmaking(client);
 
 const calculateMotm = players => {
   let best = null;
@@ -214,6 +221,7 @@ app.post('/match', async (req, res) => {
 
     const message = await channel.send({ embeds: [embed], components: [row] });
     matchData.set(message.id, players);
+    await handleMatchEnd();
   }
   res.sendStatus(200);
 });
@@ -247,6 +255,8 @@ client.once('ready', async () => {
         }
       ]
     });
+
+    await client.application.commands.create(hostConfigCommand);
   } catch (err) {
     console.error('Erreur lors de la création des commandes :', err);
   }
@@ -261,6 +271,10 @@ client.on('interactionCreate', async interaction => {
       } else if (sub === 'channel') {
         await runChannelSetup(interaction);
       }
+      return;
+    }
+    if (interaction.commandName === 'host-config') {
+      await handleHostConfigCommand(interaction);
       return;
     }
     return;
