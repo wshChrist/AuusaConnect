@@ -82,6 +82,15 @@ export function setupTeam(client) {
         const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
         if (members.length >= 6) return interaction.reply({ content: 'Équipe complète (6 membres max).', ephemeral: true });
         await sbRequest('POST', 'team_invitations', { body: { team_id: team.id, user_id: user.id, status: 'pending', role } });
+        const embed = new EmbedBuilder()
+          .setTitle('🎟️ Invitation à rejoindre une équipe')
+          .setDescription(`<@${interaction.user.id}> t\u2019a invité à rejoindre l\u2019équipe **${team.name}** !\n\n🔹 Veux-tu rejoindre cette équipe et participer à des matchs classés ?\n\n✅ Réponds avec \`/team join ${team.name}\` pour accepter.`)
+          .setColor('#a47864')
+          .setFooter({ text: 'Auusa.gg - Connecté. Compétitif. Collectif.', iconURL: 'https://i.imgur.com/9FLBUiC.png' })
+          .setTimestamp();
+        try {
+          await user.send({ embeds: [embed] });
+        } catch {}
         await interaction.reply({ content: `${user} a été invité dans **${team.name}**.`, ephemeral: true });
       } else if (sub === 'join') {
         const name = interaction.options.getString('nom');
