@@ -38,14 +38,19 @@ export function setupTeam(client) {
         name: 'team',
         description: 'Gérer les équipes Rocket League',
         options: [
-          { name: 'create', description: 'Créer une équipe', type: ApplicationCommandOptionType.Subcommand, options: [{ name: 'nom', description: 'Nom de la team', type: ApplicationCommandOptionType.String, required: true }] },
+          { name: 'create', description: 'Créer une équipe', type: ApplicationCommandOptionType.Subcommand, options: [
+            { name: 'nom', description: 'Nom de la team', type: ApplicationCommandOptionType.String, required: true },
+            { name: 'description', description: 'Description de la team', type: ApplicationCommandOptionType.String, required: true }
+          ] },
           { name: 'invite', description: 'Inviter un joueur', type: ApplicationCommandOptionType.Subcommand, options: [{ name: 'joueur', description: 'Joueur à inviter', type: ApplicationCommandOptionType.User, required: true }] },
           { name: 'join', description: 'Rejoindre une équipe', type: ApplicationCommandOptionType.Subcommand, options: [{ name: 'nom', description: 'Nom de la team', type: ApplicationCommandOptionType.String, required: true }] },
           { name: 'leave', description: "Quitter l'équipe", type: ApplicationCommandOptionType.Subcommand },
           { name: 'kick', description: 'Expulser un joueur', type: ApplicationCommandOptionType.Subcommand, options: [{ name: 'joueur', description: 'Joueur à kick', type: ApplicationCommandOptionType.User, required: true }] },
           { name: 'disband', description: "Dissoudre l'équipe", type: ApplicationCommandOptionType.Subcommand },
           { name: 'info', description: 'Info de la team', type: ApplicationCommandOptionType.Subcommand },
-          { name: 'edit', description: 'Modifier la team', type: ApplicationCommandOptionType.Subcommand, options: [ { name: 'description', description: 'Description', type: ApplicationCommandOptionType.String, required: false }, { name: 'logo', description: 'URL du logo', type: ApplicationCommandOptionType.String, required: false } ] },
+          { name: 'edit', description: 'Modifier la team', type: ApplicationCommandOptionType.Subcommand, options: [
+            { name: 'logo', description: 'URL du logo', type: ApplicationCommandOptionType.String, required: false }
+          ] },
           { name: 'match', description: 'Programmer un match', type: ApplicationCommandOptionType.Subcommand, options: [{ name: 'equipe', description: 'Équipe adverse', type: ApplicationCommandOptionType.String, required: true }, { name: 'date', description: 'Date/heure', type: ApplicationCommandOptionType.String, required: true }] },
           { name: 'report', description: 'Reporter un match', type: ApplicationCommandOptionType.Subcommand, options: [{ name: 'resultat', description: 'victoire ou défaite', type: ApplicationCommandOptionType.String, required: true, choices: [{ name: 'victoire', value: 'win' }, { name: 'défaite', value: 'loss' }] }, { name: 'score', description: 'Score', type: ApplicationCommandOptionType.String, required: true }] },
           { name: 'leaderboard', description: 'Top équipes', type: ApplicationCommandOptionType.Subcommand }
@@ -62,9 +67,10 @@ export function setupTeam(client) {
     try {
       if (sub === 'create') {
         const name = interaction.options.getString('nom');
+        const description = interaction.options.getString('description');
         const exists = await sbRequest('GET', 'teams', { query: `name=eq.${encodeURIComponent(name)}` });
         if (exists.length) return interaction.reply({ content: 'Ce nom est déjà pris.', ephemeral: true });
-        const team = await sbRequest('POST', 'teams', { body: { name, captain_id: interaction.user.id, elo: 1000 } });
+        const team = await sbRequest('POST', 'teams', { body: { name, description, captain_id: interaction.user.id, elo: 1000 } });
         await sbRequest('POST', 'team_members', { body: { user_id: interaction.user.id, team_id: team[0].id } });
         await interaction.reply(`Équipe **${name}** créée !`);
       } else if (sub === 'invite') {
@@ -109,8 +115,9 @@ export function setupTeam(client) {
         const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
         const list = members.map(m => `<@${m.user_id}>`).join(', ');
         const embed = new EmbedBuilder()
-          .setTitle(`🔰 Équipe : ${team.name}`)
-          .setDescription(team.description || '')
+          .setTitle(`🔰 Équipe : ${team.name}`);
+        if (team.description) embed.setDescription(team.description);
+        embed
           .addFields(
             { name: 'Capitaine', value: `<@${team.captain_id}>` },
             { name: `Membres (${members.length}/6)`, value: list || 'Aucun' },
@@ -121,10 +128,8 @@ export function setupTeam(client) {
       } else if (sub === 'edit') {
         const team = await findTeamByUser(interaction.user.id);
         if (!team || team.captain_id !== interaction.user.id) return interaction.reply({ content: 'Capitaine uniquement.', ephemeral: true });
-        const desc = interaction.options.getString('description');
         const logo = interaction.options.getString('logo');
         const body = {};
-        if (desc !== null) body.description = desc;
         if (logo !== null) body.logo = logo;
         if (!Object.keys(body).length) return interaction.reply({ content: 'Rien à modifier.', ephemeral: true });
         const updated = await sbRequest('PATCH', `teams?id=eq.${team.id}`, { body });
