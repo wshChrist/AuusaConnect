@@ -120,14 +120,15 @@ export function setupTeam(client) {
         const description = interaction.options.getString('description');
         const exists = await sbRequest('GET', 'teams', { query: `name=eq.${encodeURIComponent(name)}` });
         if (exists.length) return interaction.reply({ content: 'Ce nom est déjà pris.', ephemeral: true });
-        const team = await sbRequest('POST', 'teams', {
-          body: { name, description, captain_id: interaction.user.id, elo: 1000 }
-        });
-        await sbRequest('POST', 'team_members', {
-          body: { user_id: interaction.user.id, team_id: team[0].id }
-        });
-        await createTeamResources(interaction, name);
-        await interaction.reply(`Équipe **${name}** créée !`);
+        const team = await sbRequest('POST', 'teams', { body: { name, description, captain_id: interaction.user.id, elo: 1000 } });
+        await sbRequest('POST', 'team_members', { body: { user_id: interaction.user.id, team_id: team[0].id } });
+        const embed = new EmbedBuilder()
+          .setTitle('✅ Équipe créée avec succès !')
+          .setDescription(`🆕 Nom : **${name}**  \n👑 Capitaine : <@${interaction.user.id}>  \n👥 Membres : *(0/6)*\n\nℹ️ Tu peux maintenant inviter des joueurs avec :  \n\`/team invite @joueur\``)
+          .setColor('#a47864')
+          .setFooter({ iconURL: 'https://i.imgur.com/9FLBUiC.png' })
+          .setTimestamp();
+        await interaction.reply({ embeds: [embed] });
       } else if (sub === 'invite') {
         const user = interaction.options.getUser('joueur');
         const team = await findTeamByUser(interaction.user.id);
