@@ -172,13 +172,31 @@ export function setupTeam(client) {
         if (!last.length) return interaction.reply({ content: 'Aucun match à reporter.', ephemeral: true });
         await sbRequest('PATCH', `match_history?id=eq.${last[0].id}`, { body: { score, winner: result === 'win' ? team.id : last[0].team_b } });
         await interaction.reply('Résultat enregistré.');
-      } else if (sub === 'leaderboard') {
-        const rows = await sbRequest('GET', 'teams', { query: 'order=elo.desc&limit=5' });
-        const embed = new EmbedBuilder().setTitle('🏆 Leaderboard');
-        rows.forEach((t, i) => {
-          embed.addFields({ name: `#${i + 1} ${t.name}`, value: `Élo: ${t.elo}` });
-        });
-        await interaction.reply({ embeds: [embed] });
+        } else if (sub === 'leaderboard') {
+          const rows = await sbRequest('GET', 'teams', { query: 'order=elo.desc&limit=5' });
+          const embed = new EmbedBuilder()
+            .setTitle('🏆 Classement des équipes — Saison Alpha')
+            .setDescription('> 📊 Classement compétitif des équipes en temps réel.')
+            .setImage('https://i.imgur.com/oyQE5I0.png')
+            .setColor('#a47864')
+            .setFooter({ text: 'Auusa.gg - Connecté. Compétitif. Collectif.', iconURL: 'https://i.imgur.com/9FLBUiC.png' })
+            .setTimestamp();
+
+          const medals = ['🥇', '🥈', '🥉'];
+          for (let i = 0; i < rows.length; i++) {
+            const t = rows[i];
+            const wins = (await sbRequest('GET', 'match_history', { query: `team_a=eq.${t.id}&winner=eq.${t.id}` })).length;
+            const losses = (await sbRequest('GET', 'match_history', { query: `team_a=eq.${t.id}&winner=neq.${t.id}` })).filter(m => m.winner).length;
+            const ratio = wins + losses ? Math.round((wins / (wins + losses)) * 100) : 0;
+            const icon = medals[i] || '🔹';
+            embed.addFields({
+              name: `• ${icon} ${i + 1}. ${t.name}`,
+              value: `> 💠 Élo : ${t.elo} — 🏆 V : ${wins} — ❌ D : ${losses} — 📊 ${ratio}%`,
+              inline: false
+            });
+          }
+
+          await interaction.reply({ embeds: [embed] });
       }
     } catch (err) {
       console.error(err);
