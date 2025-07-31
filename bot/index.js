@@ -15,6 +15,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { setupMatchmaking } from './matchmaking.js';
 import { setupVerification, runVerificationSetup } from './verification.js';
+import { setupLeaderboard } from "./leaderboard.js";
 import express from 'express';
 import bodyParser from 'body-parser';
 
@@ -44,6 +45,7 @@ const client = new Client({
 const matchData = new Map();
 setupMatchmaking(client);
 setupVerification(client);
+// setupLeaderboard(client);
 
 const calculateMotm = players => {
   let best = null;
