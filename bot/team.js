@@ -127,7 +127,7 @@ export function setupTeam(client) {
           .setTitle('✅ Équipe créée avec succès !')
           .setDescription(`🆕 Nom : **${name}**  \n👑 Capitaine : <@${interaction.user.id}>  \n👥 Membres : *(0/6)*\n\nℹ️ Tu peux maintenant inviter des joueurs avec :  \n\`/team invite @joueur\``)
           .setColor('#a47864')
-          .setFooter({ iconURL: 'https://i.imgur.com/9FLBUiC.png' })
+          .setFooter({ text: 'Auusa.gg - Connecté. Compétitif. Collectif.', iconURL: 'https://i.imgur.com/9FLBUiC.png' })
           .setTimestamp();
         await interaction.reply({ embeds: [embed] });
       } else if (sub === 'invite') {
