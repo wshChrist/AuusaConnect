@@ -42,7 +42,7 @@ export function setupTeam(client) {
             { name: 'nom', description: 'Nom de la team', type: ApplicationCommandOptionType.String, required: true },
             { name: 'description', description: 'Description de la team', type: ApplicationCommandOptionType.String, required: true }
           ] },
-          { name: 'invite', description: 'Inviter un joueur', type: ApplicationCommandOptionType.Subcommand, options: [{ name: 'joueur', description: 'Joueur à inviter', type: ApplicationCommandOptionType.User, required: true }] },
+            { name: 'invite', description: 'Inviter un joueur', type: ApplicationCommandOptionType.Subcommand, options: [ { name: 'joueur', description: 'Joueur à inviter', type: ApplicationCommandOptionType.User, required: true }, { name: 'role', description: 'Rôle dans la team', type: ApplicationCommandOptionType.String, required: false, choices: [ { name: 'Membre', value: 'member' }, { name: 'Coach', value: 'coach' }, { name: 'Manager', value: 'manager' } ] } ] },
           { name: 'join', description: 'Rejoindre une équipe', type: ApplicationCommandOptionType.Subcommand, options: [{ name: 'nom', description: 'Nom de la team', type: ApplicationCommandOptionType.String, required: true }] },
           { name: 'leave', description: "Quitter l'équipe", type: ApplicationCommandOptionType.Subcommand },
           { name: 'kick', description: 'Expulser un joueur', type: ApplicationCommandOptionType.Subcommand, options: [{ name: 'joueur', description: 'Joueur à kick', type: ApplicationCommandOptionType.User, required: true }] },
@@ -76,11 +76,12 @@ export function setupTeam(client) {
       } else if (sub === 'invite') {
         const user = interaction.options.getUser('joueur');
         const team = await findTeamByUser(interaction.user.id);
+        const role = interaction.options.getString("role") || "member";
         if (!team) return interaction.reply({ content: 'Vous ne possédez pas de team.', ephemeral: true });
         if (team.captain_id !== interaction.user.id) return interaction.reply({ content: 'Seul le capitaine peut inviter.', ephemeral: true });
         const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
         if (members.length >= 6) return interaction.reply({ content: 'Équipe complète (6 membres max).', ephemeral: true });
-        await sbRequest('POST', 'team_invitations', { body: { team_id: team.id, user_id: user.id, status: 'pending' } });
+        await sbRequest('POST', 'team_invitations', { body: { team_id: team.id, user_id: user.id, status: 'pending', role } });
         await interaction.reply({ content: `${user} a été invité dans **${team.name}**.`, ephemeral: true });
       } else if (sub === 'join') {
         const name = interaction.options.getString('nom');
@@ -90,7 +91,14 @@ export function setupTeam(client) {
         const inv = await sbRequest('GET', 'team_invitations', { query: `team_id=eq.${team.id}&user_id=eq.${interaction.user.id}&status=eq.pending` });
         if (!inv.length) return interaction.reply({ content: "Pas d'invitation pour cette équipe.", ephemeral: true });
         await sbRequest('PATCH', `team_invitations?id=eq.${inv[0].id}`, { body: { status: 'accepted' } });
-        await sbRequest('POST', 'team_members', { body: { user_id: interaction.user.id, team_id: team.id } });
+        const role = inv[0].role || "member";
+        if (role === "coach") {
+          await sbRequest("PATCH", `teams?id=eq.${team.id}`, { body: { coach_id: interaction.user.id } });
+        } else if (role === "manager") {
+          await sbRequest("PATCH", `teams?id=eq.${team.id}`, { body: { manager_id: interaction.user.id } });
+        } else {
+          await sbRequest("POST", "team_members", { body: { user_id: interaction.user.id, team_id: team.id } });
+        }
         await interaction.reply(`Vous avez rejoint **${team.name}** !`);
       } else if (sub === 'leave') {
         const team = await findTeamByUser(interaction.user.id);
