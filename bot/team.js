@@ -165,9 +165,11 @@ export function setupTeam(client) {
         } else {
           await sbRequest("POST", "team_members", { body: { user_id: interaction.user.id, team_id: team.id } });
         }
-        const teamRole = interaction.guild.roles.cache.find(r => r.name === team.name);
-        if (teamRole) {
-          await interaction.member.roles.add(teamRole).catch(() => {});
+        if (interaction.guild && interaction.member) {
+          const teamRole = interaction.guild.roles.cache.find(r => r.name === team.name);
+          if (teamRole) {
+            await interaction.member.roles.add(teamRole).catch(() => {});
+          }
         }
         await interaction.reply(`Vous avez rejoint **${team.name}** !`);
       } else if (sub === 'leave') {
@@ -186,13 +188,15 @@ export function setupTeam(client) {
         if (!team || team.captain_id !== interaction.user.id) return interaction.reply({ content: 'Capitaine uniquement.', ephemeral: true });
         await sbRequest('DELETE', `team_members?team_id=eq.${team.id}`);
         await sbRequest('DELETE', `teams?id=eq.${team.id}`);
-        const role = interaction.guild.roles.cache.find(r => r.name === team.name);
-        if (role) await role.delete().catch(() => {});
-        const category = interaction.guild.channels.cache.find(c => c.name === team.name && c.type === ChannelType.GuildCategory);
-        if (category) {
-          const children = interaction.guild.channels.cache.filter(ch => ch.parentId === category.id);
-          for (const ch of children.values()) await ch.delete().catch(() => {});
-          await category.delete().catch(() => {});
+        if (interaction.guild) {
+          const role = interaction.guild.roles.cache.find(r => r.name === team.name);
+          if (role) await role.delete().catch(() => {});
+          const category = interaction.guild.channels.cache.find(c => c.name === team.name && c.type === ChannelType.GuildCategory);
+          if (category) {
+            const children = interaction.guild.channels.cache.filter(ch => ch.parentId === category.id);
+            for (const ch of children.values()) await ch.delete().catch(() => {});
+            await category.delete().catch(() => {});
+          }
         }
         await interaction.reply(`L'équipe **${team.name}** a été dissoute.`);
       } else if (sub === 'info') {
