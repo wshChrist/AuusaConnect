@@ -50,3 +50,7 @@ Vous pouvez préciser un rôle existant avec l'option `role` pour qu'il soit att
 Une fois la vérification active, tout nouveau membre se voit attribuer automatiquement le rôle **Non vérifié**. Il devra cliquer sur la réaction pour recevoir le rôle de membre classique.
 
 Le bot reçoit désormais des informations détaillées sur la partie (buteurs, passes décisives, tirs cadrés, MVP, scores individuels, arrêts et vrais noms d'équipe) et les présente sous forme de message formaté dans le salon configuré.
+
+### Gestion des équipes
+
+La commande `/team invite` accepte désormais une option `role` pour définir le rôle du joueur invité : `member` (par défaut), `coach` ou `manager`.
