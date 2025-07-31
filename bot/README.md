@@ -7,6 +7,7 @@ Il expose un endpoint HTTP pour recevoir les données du plugin et les affiche d
 
 - Node.js >= 18
 - Un token de bot Discord
+- Une instance Supabase avec les tables décrites dans la documentation
 
 ## Installation
 
@@ -17,6 +18,12 @@ npm install
 ## Lancement
 
 Le bot lit automatiquement les variables définies dans un fichier `.env` à la racine du dossier.
+
+Les variables nécessaires sont :
+
+- `DISCORD_TOKEN` : token de votre bot Discord
+- `SUPABASE_URL` : URL de l'instance Supabase
+- `SUPABASE_KEY` : clé de service pour effectuer les requêtes REST
 
 ```bash
 node index.js
