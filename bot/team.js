@@ -4,9 +4,15 @@ import {
   ChannelType,
   PermissionsBitField
 } from 'discord.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CHANNEL_FILE = path.join(__dirname, 'channel.json');
 
 async function sbRequest(method, table, { query = '', body } = {}) {
   const url = `${SUPABASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`;
@@ -165,10 +171,22 @@ export function setupTeam(client) {
         } else {
           await sbRequest("POST", "team_members", { body: { user_id: interaction.user.id, team_id: team.id } });
         }
-        if (interaction.guild && interaction.member) {
-          const teamRole = interaction.guild.roles.cache.find(r => r.name === team.name);
+        let guild = interaction.guild;
+        let member = interaction.member;
+        if (!guild) {
+          try {
+            const data = JSON.parse(fs.readFileSync(CHANNEL_FILE, 'utf8'));
+            if (data.channelId) {
+              const ch = await client.channels.fetch(data.channelId).catch(() => null);
+              guild = ch?.guild || null;
+              member = guild ? await guild.members.fetch(interaction.user.id).catch(() => null) : null;
+            }
+          } catch {}
+        }
+        if (guild && member) {
+          const teamRole = guild.roles.cache.find(r => r.name === team.name);
           if (teamRole) {
-            await interaction.member.roles.add(teamRole).catch(() => {});
+            await member.roles.add(teamRole).catch(() => {});
           }
         }
         await interaction.reply(`Vous avez rejoint **${team.name}** !`);

@@ -55,3 +55,4 @@ Le bot reçoit désormais des informations détaillées sur la partie (buteurs, 
 
 La commande `/team invite` accepte désormais une option `role` pour définir le rôle du joueur invité : `member` (par défaut), `coach` ou `manager`.
 La table `team_invitations` doit donc comporter une colonne `role` de type `text` enregistrant ce choix.
+Une fois l'invitation acceptée avec `/team join`, le bot ajoute automatiquement le rôle Discord de l'équipe au joueur, même si la commande est utilisée en message privé.
