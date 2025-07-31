@@ -134,6 +134,8 @@ export function setupTeam(client) {
         embed
           .addFields(
             { name: '• 👑 Capitaine', value: `> <@${team.captain_id}>`, inline: true },
+            { name: '• 🎓 Coach', value: team.coach_id ? `> <@${team.coach_id}>` : '> –', inline: true },
+            { name: '• 🧾 Manager', value: team.manager_id ? `> <@${team.manager_id}>` : '> –', inline: false },
             { name: `• 👥 Membres (${members.length}/6)`, value: list || '> – Aucun', inline: true },
             { name: '📊 Statistiques d’équipe', value: `> 🧠 Élo : ${team.elo}\n> 🏆 Victoires : ${wins}\n> ❌ Défaites : ${losses}\n> 🔄 Ratio de win : ${ratio}%`, inline: true },
             { name: '• 🏅 Dernier match', value: lastField, inline: false }
@@ -141,7 +143,7 @@ export function setupTeam(client) {
           .setColor('#a47864')
           .setFooter({ text: 'Auusa.gg - Connecté. Compétitif. Collectif.', iconURL: 'https://i.imgur.com/9FLBUiC.png' })
           .setTimestamp();
-        if (team.logo) embed.setImage(team.logo);
+        embed.setImage(team.logo || 'https://i.imgur.com/HczhXhK.png');
         await interaction.reply({ embeds: [embed] });
       } else if (sub === 'edit') {
         const team = await findTeamByUser(interaction.user.id);
