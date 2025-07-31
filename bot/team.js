@@ -1,4 +1,9 @@
-import { ApplicationCommandOptionType, EmbedBuilder } from 'discord.js';
+import {
+  ApplicationCommandOptionType,
+  EmbedBuilder,
+  ChannelType,
+  PermissionsBitField
+} from 'discord.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -29,6 +34,51 @@ async function findTeamByUser(userId) {
   const teamId = rows[0].team_id;
   const teams = await sbRequest('GET', 'teams', { query: `id=eq.${teamId}` });
   return teams[0] || null;
+}
+
+async function createTeamResources(interaction, name) {
+  const guild = interaction.guild;
+  if (!guild) return null;
+  const role = await guild.roles.create({ name }).catch(() => null);
+  if (role) {
+    await interaction.member.roles.add(role).catch(() => {});
+  }
+  const perms = [
+    { id: guild.roles.everyone, deny: [PermissionsBitField.Flags.ViewChannel] },
+    ...(role
+      ? [
+          {
+            id: role.id,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.Connect,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.Speak
+            ]
+          }
+        ]
+      : [])
+  ];
+  const category = await guild.channels.create({
+    name,
+    type: ChannelType.GuildCategory,
+    permissionOverwrites: perms
+  }).catch(() => null);
+  if (category) {
+    await guild.channels.create({
+      name: 'discussion',
+      type: ChannelType.GuildText,
+      parent: category,
+      permissionOverwrites: perms
+    }).catch(() => null);
+    await guild.channels.create({
+      name: 'vocal',
+      type: ChannelType.GuildVoice,
+      parent: category,
+      permissionOverwrites: perms
+    }).catch(() => null);
+  }
+  return role;
 }
 
 export function setupTeam(client) {
@@ -70,8 +120,13 @@ export function setupTeam(client) {
         const description = interaction.options.getString('description');
         const exists = await sbRequest('GET', 'teams', { query: `name=eq.${encodeURIComponent(name)}` });
         if (exists.length) return interaction.reply({ content: 'Ce nom est déjà pris.', ephemeral: true });
-        const team = await sbRequest('POST', 'teams', { body: { name, description, captain_id: interaction.user.id, elo: 1000 } });
-        await sbRequest('POST', 'team_members', { body: { user_id: interaction.user.id, team_id: team[0].id } });
+        const team = await sbRequest('POST', 'teams', {
+          body: { name, description, captain_id: interaction.user.id, elo: 1000 }
+        });
+        await sbRequest('POST', 'team_members', {
+          body: { user_id: interaction.user.id, team_id: team[0].id }
+        });
+        await createTeamResources(interaction, name);
         await interaction.reply(`Équipe **${name}** créée !`);
       } else if (sub === 'invite') {
         const user = interaction.options.getUser('joueur');
@@ -99,6 +154,10 @@ export function setupTeam(client) {
         } else {
           await sbRequest("POST", "team_members", { body: { user_id: interaction.user.id, team_id: team.id } });
         }
+        const teamRole = interaction.guild.roles.cache.find(r => r.name === team.name);
+        if (teamRole) {
+          await interaction.member.roles.add(teamRole).catch(() => {});
+        }
         await interaction.reply(`Vous avez rejoint **${team.name}** !`);
       } else if (sub === 'leave') {
         const team = await findTeamByUser(interaction.user.id);
@@ -116,6 +175,14 @@ export function setupTeam(client) {
         if (!team || team.captain_id !== interaction.user.id) return interaction.reply({ content: 'Capitaine uniquement.', ephemeral: true });
         await sbRequest('DELETE', `team_members?team_id=eq.${team.id}`);
         await sbRequest('DELETE', `teams?id=eq.${team.id}`);
+        const role = interaction.guild.roles.cache.find(r => r.name === team.name);
+        if (role) await role.delete().catch(() => {});
+        const category = interaction.guild.channels.cache.find(c => c.name === team.name && c.type === ChannelType.GuildCategory);
+        if (category) {
+          const children = interaction.guild.channels.cache.filter(ch => ch.parentId === category.id);
+          for (const ch of children.values()) await ch.delete().catch(() => {});
+          await category.delete().catch(() => {});
+        }
         await interaction.reply(`L'équipe **${team.name}** a été dissoute.`);
       } else if (sub === 'info') {
         const team = await findTeamByUser(interaction.user.id);
