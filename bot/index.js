@@ -428,4 +428,7 @@ client.on('interactionCreate', async interaction => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`API en écoute sur le port ${PORT}`));
 
+client.on('error', console.error);
+process.on('unhandledRejection', err => console.error('Unhandled promise rejection:', err));
+
 client.login(process.env.DISCORD_TOKEN);

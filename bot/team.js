@@ -123,16 +123,25 @@ export function setupTeam(client) {
     const sub = interaction.options.getSubcommand();
     try {
       if (sub === 'create') {
+        await interaction.deferReply({ ephemeral: true });
         const name = interaction.options.getString('nom');
         const description = interaction.options.getString('description');
         const existingTeam = await findTeamByUser(interaction.user.id);
         if (existingTeam) {
-          return interaction.reply({ content: 'Vous faites déjà partie d\'une équipe.', flags: MessageFlags.Ephemeral });
+          await interaction.editReply({ content: "Vous faites déjà partie d'une équipe." });
+          return;
         }
         const exists = await sbRequest('GET', 'teams', { query: `name=eq.${encodeURIComponent(name)}` });
-        if (exists.length) return interaction.reply({ content: 'Ce nom est déjà pris.', flags: MessageFlags.Ephemeral });
+        if (exists.length) {
+          await interaction.editReply({ content: 'Ce nom est déjà pris.' });
+          return;
+        }
         const team = await sbRequest('POST', 'teams', { body: { name, description, captain_id: interaction.user.id, elo: 1000 } });
-        await sbRequest('POST', 'team_members', { body: { user_id: interaction.user.id, team_id: team[0].id } });
+        try {
+          await sbRequest('POST', 'team_members', { body: { user_id: interaction.user.id, team_id: team[0].id } });
+        } catch (e) {
+          if (!String(e.message).includes('duplicate key')) throw e;
+        }
         await createTeamResources(interaction, name);
         const embed = new EmbedBuilder()
           .setTitle('✅ Équipe créée avec succès !')
@@ -140,15 +149,25 @@ export function setupTeam(client) {
           .setColor('#a47864')
           .setFooter({ text: 'Auusa.gg - Connecté. Compétitif. Collectif.', iconURL: 'https://i.imgur.com/9FLBUiC.png' })
           .setTimestamp();
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
       } else if (sub === 'invite') {
+        await interaction.deferReply({ ephemeral: true });
         const user = interaction.options.getUser('joueur');
         const team = await findTeamByUser(interaction.user.id);
         const role = interaction.options.getString("role") || "member";
-        if (!team) return interaction.reply({ content: 'Vous ne possédez pas de team.', flags: MessageFlags.Ephemeral });
-        if (team.captain_id !== interaction.user.id) return interaction.reply({ content: 'Seul le capitaine peut inviter.', flags: MessageFlags.Ephemeral });
+        if (!team) {
+          await interaction.editReply({ content: "Vous ne possédez pas de team." });
+          return;
+        }
+        if (team.captain_id !== interaction.user.id) {
+          await interaction.editReply({ content: 'Seul le capitaine peut inviter.' });
+          return;
+        }
         const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
-        if (members.length >= 6) return interaction.reply({ content: 'Équipe complète (6 membres max).', flags: MessageFlags.Ephemeral });
+        if (members.length >= 6) {
+          await interaction.editReply({ content: 'Équipe complète (6 membres max).' });
+          return;
+        }
         await sbRequest('POST', 'team_invitations', { body: { team_id: team.id, user_id: user.id, status: 'pending', role } });
         const embed = new EmbedBuilder()
           .setTitle('🎟️ Invitation à rejoindre une équipe')
@@ -159,18 +178,26 @@ export function setupTeam(client) {
         try {
           await user.send({ embeds: [embed] });
         } catch {}
-        await interaction.reply({ content: `${user} a été invité dans **${team.name}**.`, flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: `${user} a été invité dans **${team.name}**.` });
       } else if (sub === 'join') {
+        await interaction.deferReply({ ephemeral: true });
         const memberOf = await findTeamByUser(interaction.user.id);
         if (memberOf) {
-          return interaction.reply({ content: 'Vous faites déjà partie d\'une équipe.', flags: MessageFlags.Ephemeral });
+          await interaction.editReply({ content: "Vous faites déjà partie d'une équipe." });
+          return;
         }
         const name = interaction.options.getString('nom');
         const teamRows = await sbRequest('GET', 'teams', { query: `name=eq.${encodeURIComponent(name)}` });
-        if (!teamRows.length) return interaction.reply({ content: 'Équipe introuvable.', flags: MessageFlags.Ephemeral });
+        if (!teamRows.length) {
+          await interaction.editReply({ content: 'Équipe introuvable.' });
+          return;
+        }
         const team = teamRows[0];
         const inv = await sbRequest('GET', 'team_invitations', { query: `team_id=eq.${team.id}&user_id=eq.${interaction.user.id}&status=eq.pending` });
-        if (!inv.length) return interaction.reply({ content: "Pas d'invitation pour cette équipe.", flags: MessageFlags.Ephemeral });
+        if (!inv.length) {
+          await interaction.editReply({ content: "Pas d'invitation pour cette équipe." });
+          return;
+        }
         await sbRequest('PATCH', `team_invitations?id=eq.${inv[0].id}`, { body: { status: 'accepted' } });
         const role = inv[0].role || "member";
         if (role === "coach") {
@@ -178,7 +205,11 @@ export function setupTeam(client) {
         } else if (role === "manager") {
           await sbRequest("PATCH", `teams?id=eq.${team.id}`, { body: { manager_id: interaction.user.id } });
         } else {
-          await sbRequest("POST", "team_members", { body: { user_id: interaction.user.id, team_id: team.id } });
+          try {
+            await sbRequest('POST', 'team_members', { body: { user_id: interaction.user.id, team_id: team.id } });
+          } catch (e) {
+            if (!String(e.message).includes('duplicate key')) throw e;
+          }
         }
         let guild = interaction.guild;
         let member = interaction.member;
@@ -198,21 +229,33 @@ export function setupTeam(client) {
             await member.roles.add(teamRole).catch(() => {});
           }
         }
-        await interaction.reply(`Vous avez rejoint **${team.name}** !`);
+        await interaction.editReply(`Vous avez rejoint **${team.name}** !`);
       } else if (sub === 'leave') {
+        await interaction.deferReply({ ephemeral: true });
         const team = await findTeamByUser(interaction.user.id);
-        if (!team) return interaction.reply({ content: 'Vous ne faites partie d\'aucune équipe.', flags: MessageFlags.Ephemeral });
+        if (!team) {
+          await interaction.editReply({ content: "Vous ne faites partie d'aucune équipe." });
+          return;
+        }
         await sbRequest('DELETE', `team_members?user_id=eq.${interaction.user.id}&team_id=eq.${team.id}`);
-        await interaction.reply('Vous avez quitté l\'équipe.');
+        await interaction.editReply("Vous avez quitté l'équipe.");
       } else if (sub === 'kick') {
+        await interaction.deferReply({ ephemeral: true });
         const user = interaction.options.getUser('joueur');
         const team = await findTeamByUser(interaction.user.id);
-        if (!team || team.captain_id !== interaction.user.id) return interaction.reply({ content: 'Capitaine uniquement.', flags: MessageFlags.Ephemeral });
+        if (!team || team.captain_id !== interaction.user.id) {
+          await interaction.editReply({ content: 'Capitaine uniquement.' });
+          return;
+        }
         await sbRequest('DELETE', `team_members?user_id=eq.${user.id}&team_id=eq.${team.id}`);
-        await interaction.reply(`${user} a été expulsé.`);
+        await interaction.editReply(`${user} a été expulsé.`);
       } else if (sub === 'disband') {
+        await interaction.deferReply({ ephemeral: true });
         const team = await findTeamByUser(interaction.user.id);
-        if (!team || team.captain_id !== interaction.user.id) return interaction.reply({ content: 'Capitaine uniquement.', flags: MessageFlags.Ephemeral });
+        if (!team || team.captain_id !== interaction.user.id) {
+          await interaction.editReply({ content: 'Capitaine uniquement.' });
+          return;
+        }
         await sbRequest('DELETE', `team_members?team_id=eq.${team.id}`);
         await sbRequest('DELETE', `teams?id=eq.${team.id}`);
         if (interaction.guild) {
@@ -225,10 +268,14 @@ export function setupTeam(client) {
             await category.delete().catch(() => {});
           }
         }
-        await interaction.reply(`L'équipe **${team.name}** a été dissoute.`);
+        await interaction.editReply(`L'équipe **${team.name}** a été dissoute.`);
       } else if (sub === 'info') {
+        await interaction.deferReply({ ephemeral: true });
         const team = await findTeamByUser(interaction.user.id);
-        if (!team) return interaction.reply({ content: 'Aucune équipe trouvée.', flags: MessageFlags.Ephemeral });
+        if (!team) {
+          await interaction.editReply({ content: 'Aucune équipe trouvée.' });
+          return;
+        }
         const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
         const list = members.map(m => `> – <@${m.user_id}>`).join('\n');
         const wins = (await sbRequest('GET', 'match_history', { query: `team_a=eq.${team.id}&winner=eq.${team.id}` })).length;
@@ -261,35 +308,57 @@ export function setupTeam(client) {
           .setFooter({ text: 'Auusa.gg - Connecté. Compétitif. Collectif.', iconURL: 'https://i.imgur.com/9FLBUiC.png' })
           .setTimestamp();
         embed.setImage(team.logo || 'https://i.imgur.com/HczhXhK.png');
-        await interaction.reply({ embeds: [embed] });
+        await interaction.editReply({ embeds: [embed] });
       } else if (sub === 'edit') {
+        await interaction.deferReply({ ephemeral: true });
         const team = await findTeamByUser(interaction.user.id);
-        if (!team || team.captain_id !== interaction.user.id) return interaction.reply({ content: 'Capitaine uniquement.', flags: MessageFlags.Ephemeral });
+        if (!team || team.captain_id !== interaction.user.id) {
+          await interaction.editReply({ content: 'Capitaine uniquement.' });
+          return;
+        }
         const logo = interaction.options.getString('logo');
         const body = {};
         if (logo !== null) body.logo = logo;
-        if (!Object.keys(body).length) return interaction.reply({ content: 'Rien à modifier.', flags: MessageFlags.Ephemeral });
+        if (!Object.keys(body).length) {
+          await interaction.editReply({ content: 'Rien à modifier.' });
+          return;
+        }
         const updated = await sbRequest('PATCH', `teams?id=eq.${team.id}`, { body });
-        await interaction.reply({ content: 'Équipe mise à jour.', flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: 'Équipe mise à jour.' });
       } else if (sub === 'match') {
+        await interaction.deferReply({ ephemeral: true });
         const team = await findTeamByUser(interaction.user.id);
-        if (!team || team.captain_id !== interaction.user.id) return interaction.reply({ content: 'Capitaine uniquement.', flags: MessageFlags.Ephemeral });
+        if (!team || team.captain_id !== interaction.user.id) {
+          await interaction.editReply({ content: 'Capitaine uniquement.' });
+          return;
+        }
         const opponent = interaction.options.getString('equipe');
         const date = interaction.options.getString('date');
         const oppRows = await sbRequest('GET', 'teams', { query: `name=eq.${encodeURIComponent(opponent)}` });
-        if (!oppRows.length) return interaction.reply({ content: 'Équipe adverse introuvable.', flags: MessageFlags.Ephemeral });
+        if (!oppRows.length) {
+          await interaction.editReply({ content: 'Équipe adverse introuvable.' });
+          return;
+        }
         await sbRequest('POST', 'match_history', { body: { team_a: team.id, team_b: oppRows[0].id, score: '', date } });
-        await interaction.reply('Match programmé.');
+        await interaction.editReply('Match programmé.');
       } else if (sub === 'report') {
+        await interaction.deferReply({ ephemeral: true });
         const result = interaction.options.getString('resultat');
         const score = interaction.options.getString('score');
         const team = await findTeamByUser(interaction.user.id);
-        if (!team) return interaction.reply({ content: 'Aucune équipe trouvée.', flags: MessageFlags.Ephemeral });
+        if (!team) {
+          await interaction.editReply({ content: 'Aucune équipe trouvée.' });
+          return;
+        }
         const last = await sbRequest('GET', 'match_history', { query: `team_a=eq.${team.id}&order=id.desc&limit=1` });
-        if (!last.length) return interaction.reply({ content: 'Aucun match à reporter.', flags: MessageFlags.Ephemeral });
+        if (!last.length) {
+          await interaction.editReply({ content: 'Aucun match à reporter.' });
+          return;
+        }
         await sbRequest('PATCH', `match_history?id=eq.${last[0].id}`, { body: { score, winner: result === 'win' ? team.id : last[0].team_b } });
-        await interaction.reply('Résultat enregistré.');
+        await interaction.editReply('Résultat enregistré.');
         } else if (sub === 'leaderboard') {
+          await interaction.deferReply({ ephemeral: true });
           const rows = await sbRequest('GET', 'teams', { query: 'order=elo.desc&limit=5' });
           const embed = new EmbedBuilder()
             .setTitle('🏆 Classement des équipes — Saison Alpha')
@@ -313,11 +382,21 @@ export function setupTeam(client) {
             });
           }
 
-          await interaction.reply({ embeds: [embed] });
+          await interaction.editReply({ embeds: [embed] });
       }
     } catch (err) {
       console.error(err);
-      await interaction.reply({ content: `Erreur: ${err.message}`, flags: MessageFlags.Ephemeral });
+      try {
+        if (interaction.deferred && !interaction.replied) {
+          await interaction.editReply({ content: `Erreur: ${err.message}` });
+        } else if (interaction.replied) {
+          await interaction.followUp({ content: `Erreur: ${err.message}`, ephemeral: true });
+        } else {
+          await interaction.reply({ content: `Erreur: ${err.message}`, flags: MessageFlags.Ephemeral });
+        }
+      } catch (e) {
+        console.error('Failed to send error reply:', e);
+      }
     }
   });
 }
