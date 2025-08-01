@@ -6,6 +6,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
+  UserSelectMenuBuilder,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -149,6 +150,7 @@ async function showMainMenu(interaction) {
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('team_view').setLabel('👁️ Voir mon équipe').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('team_edit').setLabel('📝 Modifier équipe').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('team_invite').setLabel('📨 Inviter un joueur').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('team_members').setLabel('👥 Gérer les membres').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('team_leaderboard').setLabel('📈 Voir le classement').setStyle(ButtonStyle.Secondary)
   );
@@ -217,6 +219,11 @@ export function setupTeam(client) {
               { label: 'Bio', value: 'bio' },
               { label: 'Description', value: 'description' }
             );
+          await interaction.reply({ components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+        } else if (interaction.customId === 'team_invite') {
+          const menu = new UserSelectMenuBuilder()
+            .setCustomId('team_invite_select')
+            .setPlaceholder('Sélectionne un joueur à inviter');
           await interaction.reply({ components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
         } else if (interaction.customId === 'team_members') {
           const team = await findTeamByUser(interaction.user.id);
@@ -318,6 +325,19 @@ export function setupTeam(client) {
           await sbRequest('PATCH', `teams?id=eq.${team.id}`, { body: { captain_id: userId } });
           await interaction.reply({ content: `<@${userId}> est maintenant capitaine.`, ephemeral: true });
         }
+      } else if (interaction.isUserSelectMenu()) {
+        if (interaction.customId === 'team_invite_select') {
+          const userId = interaction.values[0];
+          const menu = new StringSelectMenuBuilder()
+            .setCustomId(`team_invite_role_${userId}`)
+            .setPlaceholder('Choisis un rôle')
+            .addOptions(
+              { label: 'Membre', value: 'member' },
+              { label: 'Coach', value: 'coach' },
+              { label: 'Manager', value: 'manager' }
+            );
+          await interaction.update({ components: [new ActionRowBuilder().addComponents(menu)] });
+        }
       } else if (interaction.isStringSelectMenu()) {
         if (interaction.customId === 'team_edit_select') {
           const value = interaction.values[0];
@@ -328,6 +348,35 @@ export function setupTeam(client) {
               new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(value).setLabel(`Nouveau ${value}`).setStyle(TextInputStyle.Short).setRequired(true))
             );
           await interaction.showModal(modal);
+        } else if (interaction.customId.startsWith('team_invite_role_')) {
+          const userId = interaction.customId.replace('team_invite_role_', '');
+          const role = interaction.values[0];
+          const team = await findTeamByUser(interaction.user.id);
+          if (!team) {
+            await interaction.update({ content: 'Vous ne possédez pas de team.', components: [] });
+            return;
+          }
+          if (team.captain_id !== interaction.user.id) {
+            await interaction.update({ content: 'Seul le capitaine peut inviter.', components: [] });
+            return;
+          }
+          const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
+          if (members.length >= 6) {
+            await interaction.update({ content: 'Équipe complète (6 membres max).', components: [] });
+            return;
+          }
+          await sbRequest('POST', 'team_invitations', { body: { team_id: team.id, user_id: userId, status: 'pending', role } });
+          const embed = new EmbedBuilder()
+            .setTitle('🎟️ Invitation à rejoindre une équipe')
+            .setDescription(`<@${interaction.user.id}> t\u2019a invité à rejoindre l\u2019équipe **${team.name}** !\n\n🔹 Veux-tu rejoindre cette équipe et participer à des matchs classés ?\n\n✅ Réponds avec \`/team join ${team.name}\` pour accepter.`)
+            .setColor('#a47864')
+            .setFooter({ text: 'Auusa.gg - Connecté. Compétitif. Collectif.', iconURL: 'https://i.imgur.com/9FLBUiC.png' })
+            .setTimestamp();
+          try {
+            const user = await interaction.client.users.fetch(userId);
+            await user.send({ embeds: [embed] });
+          } catch {}
+          await interaction.update({ content: `<@${userId}> a été invité dans **${team.name}**.`, components: [] });
         }
       } else if (interaction.isModalSubmit()) {
         if (interaction.customId === 'team_create_modal') {
