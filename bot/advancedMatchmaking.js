@@ -12,17 +12,25 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
 async function sbRequest(method, table, { query = '', body } = {}) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error('SUPABASE_URL et SUPABASE_KEY doivent être définies');
+  }
   const url = `${SUPABASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`;
-  const res = await fetch(url, {
-    method,
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation'
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation'
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  } catch (err) {
+    throw new Error(`Échec de la requête vers Supabase: ${err.message}`);
+  }
   if (!res.ok) {
     let msg;
     try {
