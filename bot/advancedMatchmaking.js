@@ -143,24 +143,38 @@ export function setupAdvancedMatchmaking(client) {
       }
     });
 
+    const is1v1 = info.maxPlayers === 2;
     activeMatches.set(session.id, {
       id: session.id,
       players: players.map(p => p.id),
       textId: text.id,
       voiceId: voice.id,
-      candidates: new Set(),
+      candidates: is1v1 ? new Set(players.map(p => p.id)) : new Set(),
       hostId: null,
-      teamVoiceIds: []
+      teamVoiceIds: [],
+      ...(is1v1 ? { captains: players.map(p => p.id) } : {})
     });
 
-    const capEmbed = new EmbedBuilder()
-      .setTitle('🥂 Sélection des capitaines')
-      .setDescription('➤ Cliquez pour vous proposer. Deux seront choisis.');
-    const capBtn = new ButtonBuilder()
-      .setCustomId(`cap_${session.id}`)
-      .setLabel('Me proposer')
-      .setStyle(ButtonStyle.Primary);
-    await text.send({ embeds: [capEmbed], components: [new ActionRowBuilder().addComponents(capBtn)] });
+    if (is1v1) {
+      await text.send(`Capitaines : <@${players[0].id}> et <@${players[1].id}>`);
+      const hostEmbed = new EmbedBuilder()
+        .setTitle('🔨 Qui héberge ?')
+        .setDescription('➤ Cliquez sur “Je veux héberger”\n➤ Ensuite, utilisez `/host-config`.');
+      const hostBtn = new ButtonBuilder()
+        .setCustomId(`host_${session.id}`)
+        .setLabel('Je veux héberger')
+        .setStyle(ButtonStyle.Success);
+      await text.send({ embeds: [hostEmbed], components: [new ActionRowBuilder().addComponents(hostBtn)] });
+    } else {
+      const capEmbed = new EmbedBuilder()
+        .setTitle('🥂 Sélection des capitaines')
+        .setDescription('➤ Cliquez pour vous proposer. Deux seront choisis.');
+      const capBtn = new ButtonBuilder()
+        .setCustomId(`cap_${session.id}`)
+        .setLabel('Me proposer')
+        .setStyle(ButtonStyle.Primary);
+      await text.send({ embeds: [capEmbed], components: [new ActionRowBuilder().addComponents(capBtn)] });
+    }
   });
 
   client.on('interactionCreate', async interaction => {
