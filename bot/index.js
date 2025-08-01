@@ -19,6 +19,7 @@ import { setupTeam } from './team.js';
 import { setupRegistration } from './registration.js';
 import express from 'express';
 import bodyParser from 'body-parser';
+import { setupAdvancedMatchmaking, handleMatchResult } from "./advancedMatchmaking.js";
 
 const app = express();
 app.use(bodyParser.json());
@@ -48,6 +49,7 @@ setupMatchmaking(client);
 setupVerification(client);
 setupTeam(client);
 setupRegistration(client);
+setupAdvancedMatchmaking(client);
 
 const calculateMotm = players => {
   let best = null;
@@ -217,7 +219,7 @@ app.post('/match', async (req, res) => {
     const row = new ActionRowBuilder().addComponents(btn, teamBtn);
 
     const message = await channel.send({ embeds: [embed], components: [row] });
-    matchData.set(message.id, players);
+    await handleMatchResult(req.body, client);
   }
   res.sendStatus(200);
 });
