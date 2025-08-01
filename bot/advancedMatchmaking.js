@@ -246,11 +246,20 @@ export function setupAdvancedMatchmaking(client) {
       const guild = interaction.guild;
       if (guild) {
         const shuffled = shuffle(match.players);
+        const [capBlueId, capOrangeId] = match.captains || [];
+        const others = shuffled.filter(id => id !== capBlueId && id !== capOrangeId);
         const teamSize = Math.floor(shuffled.length / 2);
-        const teamBlue = shuffled.slice(0, teamSize);
-        const teamOrange = shuffled.slice(teamSize);
+        const teamBlue = capBlueId ? [capBlueId, ...others.slice(0, teamSize - 1)] : shuffled.slice(0, teamSize);
+        const teamOrange = capOrangeId ? [capOrangeId, ...others.slice(teamSize - 1)] : shuffled.slice(teamSize);
+
+        const fetchMember = async id =>
+          guild.members.cache.get(id) || (await guild.members.fetch(id).catch(() => null));
+
+        const capBlueMember = capBlueId ? await fetchMember(capBlueId) : null;
+        const capOrangeMember = capOrangeId ? await fetchMember(capOrangeId) : null;
+
         const blue = await guild.channels.create({
-          name: '🔵│Team Bleue',
+          name: `🔵│Team ${capBlueMember ? capBlueMember.displayName : 'Bleue'}`,
           type: ChannelType.GuildVoice,
           parent: MATCH_CATEGORY_ID,
           permissionOverwrites: [
@@ -259,7 +268,7 @@ export function setupAdvancedMatchmaking(client) {
           ]
         });
         const orange = await guild.channels.create({
-          name: '🟠│Team Orange',
+          name: `🟠│Team ${capOrangeMember ? capOrangeMember.displayName : 'Orange'}`,
           type: ChannelType.GuildVoice,
           parent: MATCH_CATEGORY_ID,
           permissionOverwrites: [
