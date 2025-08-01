@@ -38,6 +38,13 @@ async function sbRequest(method, table, { query = '', body } = {}) {
 const activeMatches = new Map(); // matchId -> data
 let counter = 0;
 
+function parseMatchChannel(name) {
+  const m = name.match(/\d+v\d+/);
+  if (!m) return null;
+  const [a, b] = m[0].split('v').map(Number);
+  return { type: m[0], maxPlayers: a === b ? a * 2 : a + b };
+}
+
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -75,16 +82,18 @@ export function setupAdvancedMatchmaking(client) {
 
   client.on('voiceStateUpdate', async (oldState, newState) => {
     const channel = newState.channel;
-    if (!channel || channel.name !== '🎮│2v2') return;
+    if (!channel) return;
+    const info = parseMatchChannel(channel.name);
+    if (!info) return;
     const members = channel.members.filter(m => !m.user.bot);
-    if (members.size !== 4) return;
+    if (members.size !== info.maxPlayers) return;
     counter += 1;
     const number = String(counter).padStart(4, '0');
     const guild = channel.guild;
     const players = [...members.values()];
 
     const text = await guild.channels.create({
-      name: `🔒│2v2-match-${number}`,
+      name: `🔒│${info.type}-match-${number}`,
       type: ChannelType.GuildText,
       permissionOverwrites: [
         { id: guild.roles.everyone, deny: PermissionsBitField.Flags.ViewChannel },
@@ -107,7 +116,7 @@ export function setupAdvancedMatchmaking(client) {
 
     const [session] = await sbRequest('POST', 'match_sessions', {
       body: {
-        type: '2v2',
+        type: info.type,
         players: players.map(p => p.id),
         voice_channel_id: voice.id,
         text_channel_id: text.id,
@@ -201,8 +210,9 @@ export function setupAdvancedMatchmaking(client) {
       const guild = interaction.guild;
       if (guild) {
         const shuffled = shuffle(match.players);
-        const teamBlue = shuffled.slice(0, 2);
-        const teamOrange = shuffled.slice(2);
+        const teamSize = Math.floor(shuffled.length / 2);
+        const teamBlue = shuffled.slice(0, teamSize);
+        const teamOrange = shuffled.slice(teamSize);
         const blue = await guild.channels.create({
           name: '🔵│Team Bleue',
           type: ChannelType.GuildVoice,
