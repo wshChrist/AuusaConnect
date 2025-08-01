@@ -99,8 +99,10 @@ async function createTeamResources(interaction, name) {
 
 async function buildTeamEmbed(team) {
   const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
+  const list = members.map(m => `> – <@${m.user_id}>`).join('\n');
   const wins = (await sbRequest('GET', 'match_history', { query: `team_a=eq.${team.id}&winner=eq.${team.id}` })).length;
   const losses = (await sbRequest('GET', 'match_history', { query: `team_a=eq.${team.id}&winner=neq.${team.id}` })).filter(m => m.winner).length;
+  const ratio = wins + losses ? Math.round((wins / (wins + losses)) * 100) : 0;
   const lastRows = await sbRequest('GET', 'match_history', { query: `team_a=eq.${team.id}&order=id.desc&limit=1` });
   let lastField = 'Aucun match enregistré.';
   if (lastRows.length) {
@@ -111,18 +113,20 @@ async function buildTeamEmbed(team) {
     lastField = `vs ${oppName} → ${result} ${match.score || ''}`;
     if (match.date) lastField += ` (${match.date})`;
   }
-  const embed = new EmbedBuilder()
-    .setTitle(`🔰 ${team.name}`)
+  const embed = new EmbedBuilder().setTitle(`📜 Équipe : **${team.name}**`);
+  if (team.description) embed.setDescription(`> ${team.description}`);
+  embed
     .addFields(
-      { name: '👑 Capitaine', value: `<@${team.captain_id}>`, inline: true },
-      { name: '👥 Membres', value: `${members.length}/6`, inline: true },
-      { name: '🧠 Élo', value: String(team.elo), inline: true },
-      { name: '🏅 Dernier match', value: lastField, inline: false }
+      { name: '• 👑 Capitaine', value: `> <@${team.captain_id}>`, inline: true },
+      { name: '• 🎓 Coach', value: team.coach_id ? `> <@${team.coach_id}>` : '> –', inline: true },
+      { name: '• 🧾 Manager', value: team.manager_id ? `> <@${team.manager_id}>` : '> –', inline: false },
+      { name: `• 👥 Membres (${members.length}/6)`, value: list || '> – Aucun', inline: true },
+      { name: '📊 Statistiques d’équipe', value: `> 🧠 Élo : ${team.elo}\n> 🏆 Victoires : ${wins}\n> ❌ Défaites : ${losses}\n> 🔄 Ratio de win : ${ratio}%`, inline: true },
+      { name: '• 🏅 Dernier match', value: lastField, inline: false }
     )
     .setColor('#a47864')
     .setFooter({ text: 'Auusa.gg - Connecté. Compétitif. Collectif.', iconURL: 'https://i.imgur.com/9FLBUiC.png' })
     .setTimestamp();
-  if (team.description) embed.setDescription(`> ${team.description}`);
   embed.setImage(team.logo || 'https://i.imgur.com/HczhXhK.png');
   return embed;
 }
