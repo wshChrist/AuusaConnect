@@ -300,13 +300,18 @@ export function setupTeam(client) {
           const page = parseInt(interaction.customId.replace('team_lb_next_', ''), 10);
           await showLeaderboard(interaction, page + 1, true);
         } else if (interaction.customId === 'team_search') {
-          const modal = new ModalBuilder()
-            .setTitle('Rechercher une équipe')
-            .setCustomId('team_search_modal')
-            .addComponents(
-              new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('name').setLabel('Nom de l\u2019équipe').setStyle(TextInputStyle.Short).setRequired(true))
-            );
-          await interaction.showModal(modal);
+          const rows = await sbRequest('GET', 'teams', { query: 'select=id,name&order=name.asc&limit=25' });
+          if (!rows.length) {
+            await interaction.reply({ content: 'Aucune équipe trouvée.', ephemeral: true });
+            return;
+          }
+          const menu = new StringSelectMenuBuilder()
+            .setCustomId('team_search_select')
+            .setPlaceholder('Sélectionne une équipe');
+          for (const t of rows) {
+            menu.addOptions({ label: t.name, value: String(t.id) });
+          }
+          await interaction.reply({ components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
         } else if (interaction.customId === 'team_schedule') {
           const modal = new ModalBuilder()
             .setTitle('Programmer un match')
@@ -415,6 +420,15 @@ export function setupTeam(client) {
             await user.send({ embeds: [embed] });
           } catch {}
           await interaction.editReply({ content: `<@${userId}> a été invité dans **${team.name}**.`, components: [] });
+        } else if (interaction.customId === 'team_search_select') {
+          const teamId = interaction.values[0];
+          const rows = await sbRequest('GET', 'teams', { query: `id=eq.${teamId}` });
+          if (!rows.length) {
+            await interaction.update({ content: 'Équipe introuvable.', components: [] });
+            return;
+          }
+          const embed = await buildTeamEmbed(rows[0]);
+          await interaction.update({ embeds: [embed], components: [] });
         }
       } else if (interaction.isModalSubmit()) {
         if (interaction.customId === 'team_create_modal') {
