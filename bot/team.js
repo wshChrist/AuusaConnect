@@ -351,18 +351,19 @@ export function setupTeam(client) {
         } else if (interaction.customId.startsWith('team_invite_role_')) {
           const userId = interaction.customId.replace('team_invite_role_', '');
           const role = interaction.values[0];
+          await interaction.deferUpdate();
           const team = await findTeamByUser(interaction.user.id);
           if (!team) {
-            await interaction.update({ content: 'Vous ne possédez pas de team.', components: [] });
+            await interaction.editReply({ content: 'Vous ne possédez pas de team.', components: [] });
             return;
           }
           if (team.captain_id !== interaction.user.id) {
-            await interaction.update({ content: 'Seul le capitaine peut inviter.', components: [] });
+            await interaction.editReply({ content: 'Seul le capitaine peut inviter.', components: [] });
             return;
           }
           const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
           if (members.length >= 6) {
-            await interaction.update({ content: 'Équipe complète (6 membres max).', components: [] });
+            await interaction.editReply({ content: 'Équipe complète (6 membres max).', components: [] });
             return;
           }
           await sbRequest('POST', 'team_invitations', { body: { team_id: team.id, user_id: userId, status: 'pending', role } });
@@ -376,7 +377,7 @@ export function setupTeam(client) {
             const user = await interaction.client.users.fetch(userId);
             await user.send({ embeds: [embed] });
           } catch {}
-          await interaction.update({ content: `<@${userId}> a été invité dans **${team.name}**.`, components: [] });
+          await interaction.editReply({ content: `<@${userId}> a été invité dans **${team.name}**.`, components: [] });
         }
       } else if (interaction.isModalSubmit()) {
         if (interaction.customId === 'team_create_modal') {
