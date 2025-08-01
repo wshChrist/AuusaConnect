@@ -104,7 +104,9 @@ export function setupTeam(client) {
           { name: 'leave', description: "Quitter l'équipe", type: ApplicationCommandOptionType.Subcommand },
           { name: 'kick', description: 'Expulser un joueur', type: ApplicationCommandOptionType.Subcommand, options: [{ name: 'joueur', description: 'Joueur à kick', type: ApplicationCommandOptionType.User, required: true }] },
           { name: 'disband', description: "Dissoudre l'équipe", type: ApplicationCommandOptionType.Subcommand },
-          { name: 'info', description: 'Info de la team', type: ApplicationCommandOptionType.Subcommand },
+          { name: 'info', description: 'Info de la team', type: ApplicationCommandOptionType.Subcommand, options: [
+            { name: 'team', description: 'Nom de la team', type: ApplicationCommandOptionType.String, required: false }
+          ] },
           { name: 'edit', description: 'Modifier la team', type: ApplicationCommandOptionType.Subcommand, options: [
             { name: 'logo', description: 'URL du logo', type: ApplicationCommandOptionType.String, required: false }
           ] },
@@ -271,10 +273,26 @@ export function setupTeam(client) {
         await interaction.editReply(`L'équipe **${team.name}** a été dissoute.`);
       } else if (sub === 'info') {
         await interaction.deferReply({ ephemeral: true });
-        const team = await findTeamByUser(interaction.user.id);
-        if (!team) {
-          await interaction.editReply({ content: 'Aucune équipe trouvée.' });
-          return;
+        const teamName = interaction.options.getString('team');
+        let team;
+        if (teamName) {
+          const rows = await sbRequest('GET', 'teams', { query: `name=ilike.${encodeURIComponent(teamName)}` });
+          if (!rows.length) {
+            const embed = new EmbedBuilder()
+              .setDescription(`❌ Équipe introuvable : aucun résultat pour “${teamName}”.`)
+              .setColor('#a47864')
+              .setFooter({ text: 'Auusa.gg - Connecté. Compétitif. Collectif.', iconURL: 'https://i.imgur.com/9FLBUiC.png' })
+              .setTimestamp();
+            await interaction.editReply({ embeds: [embed] });
+            return;
+          }
+          team = rows[0];
+        } else {
+          team = await findTeamByUser(interaction.user.id);
+          if (!team) {
+            await interaction.editReply({ content: 'Aucune équipe trouvée.' });
+            return;
+          }
         }
         const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
         const list = members.map(m => `> – <@${m.user_id}>`).join('\n');
