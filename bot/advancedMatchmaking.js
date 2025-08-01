@@ -12,6 +12,8 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 // Permet d'accepter SUPABASE_URL avec ou sans le segment /rest/v1
 const BASE_URL = SUPABASE_URL?.replace(/\/rest\/v1\/?$/, '');
+// Catégorie regroupant les salons temporaires de match
+const MATCH_CATEGORY_ID = '1400845391238398112';
 
 async function sbRequest(method, table, { query = '', body } = {}) {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -113,6 +115,7 @@ export function setupAdvancedMatchmaking(client) {
     const text = await guild.channels.create({
       name: `🔒│${info.type}-match-${number}`,
       type: ChannelType.GuildText,
+      parent: MATCH_CATEGORY_ID,
       permissionOverwrites: [
         { id: guild.roles.everyone, deny: PermissionsBitField.Flags.ViewChannel },
         ...players.map(p => ({ id: p.id, allow: PermissionsBitField.Flags.ViewChannel }))
@@ -122,6 +125,7 @@ export function setupAdvancedMatchmaking(client) {
     const voice = await guild.channels.create({
       name: `🎙️│Match #${number}`,
       type: ChannelType.GuildVoice,
+      parent: MATCH_CATEGORY_ID,
       permissionOverwrites: [
         { id: guild.roles.everyone, deny: PermissionsBitField.Flags.Connect },
         ...players.map(p => ({ id: p.id, allow: PermissionsBitField.Flags.Connect }))
@@ -248,6 +252,7 @@ export function setupAdvancedMatchmaking(client) {
         const blue = await guild.channels.create({
           name: '🔵│Team Bleue',
           type: ChannelType.GuildVoice,
+          parent: MATCH_CATEGORY_ID,
           permissionOverwrites: [
             { id: guild.roles.everyone, deny: PermissionsBitField.Flags.Connect },
             ...teamBlue.map(id => ({ id, allow: PermissionsBitField.Flags.Connect }))
@@ -256,6 +261,7 @@ export function setupAdvancedMatchmaking(client) {
         const orange = await guild.channels.create({
           name: '🟠│Team Orange',
           type: ChannelType.GuildVoice,
+          parent: MATCH_CATEGORY_ID,
           permissionOverwrites: [
             { id: guild.roles.everyone, deny: PermissionsBitField.Flags.Connect },
             ...teamOrange.map(id => ({ id, allow: PermissionsBitField.Flags.Connect }))

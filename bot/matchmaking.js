@@ -15,6 +15,7 @@ export function setupMatchmaking(client) {
   const banRoleName = '🚫 Banni Ranked';
   const bakkesRole = '🧩 BakkesMod';
   const consoleRole = 'Console';
+  const MATCH_CATEGORY_ID = '1400845391238398112';
   const bans = new Map(); // userId -> {count}
   let matchCounter = 0;
 
@@ -44,6 +45,7 @@ export function setupMatchmaking(client) {
     const privateVocal = await guild.channels.create({
       name: `🔐 Ranked Match #${matchCounter}`,
       type: ChannelType.GuildVoice,
+      parent: MATCH_CATEGORY_ID,
       permissionOverwrites: [
         { id: guild.roles.everyone, deny: PermissionsBitField.Flags.Connect },
         ...players.map(p => ({ id: p.id, allow: PermissionsBitField.Flags.Connect })),
@@ -54,6 +56,7 @@ export function setupMatchmaking(client) {
     const privateText = await guild.channels.create({
       name: `ranked-match-${matchCounter}`,
       type: ChannelType.GuildText,
+      parent: MATCH_CATEGORY_ID,
       permissionOverwrites: [
         { id: guild.roles.everyone, deny: PermissionsBitField.Flags.ViewChannel },
         ...players.map(p => ({ id: p.id, allow: PermissionsBitField.Flags.ViewChannel })),
