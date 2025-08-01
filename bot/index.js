@@ -7,7 +7,8 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder,
   ApplicationCommandOptionType,
-  Partials
+  Partials,
+  MessageFlags
 } from 'discord.js';
 import 'dotenv/config';
 import fs from 'fs';
@@ -135,13 +136,21 @@ app.post('/match', async (req, res) => {
     teamOrange = 'Orange',
     scorers = [],
     mvp = '',
-    players = []
+    players = [],
+    duration = '5:00',
+    map = 'Inconnu'
   } = req.body;
   if (channelId && client.channels.cache.has(channelId)) {
     const channel = client.channels.cache.get(channelId);
 
     const bluePlayers = players.filter(p => p.team === 0);
     const orangePlayers = players.filter(p => p.team === 1);
+
+    const matchDateStr = new Date().toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
 
     const { player: motmPlayer } = calculateMotm(players);
 
@@ -171,39 +180,47 @@ app.post('/match', async (req, res) => {
       rotationScore(orangePlayers)
     );
 
+    const xGBlue = (sum(bluePlayers, 'shots') * 0.25).toFixed(1);
+    const xGOrange = (sum(orangePlayers, 'shots') * 0.25).toFixed(1);
+    const [xgB, xgO] = boldIfGreater(xGBlue, xGOrange);
+
     const embed = new EmbedBuilder()
-      .setTitle('🏁 **Match terminé !**')
+      .setTitle('🏁 Match terminé !')
       .setDescription(
-        `**Score final**  \n🔵 ${teamBlue} ${scoreBlue} - ${scoreOrange} ${teamOrange} 🔶`
+        `> 🕒 Durée : ${duration}\n> 📍 Carte : ${map}\n> 📅 Date : ${matchDateStr}`
       )
       .addFields(
         {
-          name: '**📋 Compositions**',
-          value: `🔵 ${teamBlue} : ${bluePlayers
-            .map(p => p.name)
-            .join(', ')}  \n🔶 ${teamOrange} : ${orangePlayers
-            .map(p => p.name)
-            .join(', ')}`,
+          name: '🟦 Blue Team',
+          value: `> 👥 : ${bluePlayers.map(p => p.name).join(', ') || 'Aucun.'}`,
+          inline: true
+        },
+        {
+          name: '🟧 Orange Team',
+          value: `> 👥 : ${orangePlayers.map(p => p.name).join(', ') || 'Aucun.'}`,
+          inline: true
+        },
+        {
+          name: '🏅 Homme du match :',
+          value: `> **${motmPlayer ? motmPlayer.name : 'Aucun'}** **(${motmNote}/10)**`,
           inline: false
         },
         {
-          name: `👑 **Homme du match** : ${
-            motmPlayer ? motmPlayer.name : 'Aucun'
-          } (${motmPlayer ? motmNote : '0'}/10)`,
-          value: '',
-          inline: false
-        },
-        {
-          name: '📊 **Stats globales**',
-          value: `• Buts : ${goalsB} / ${goalsO}  \n` +
-            `• Tirs cadrés : ${shotsB} / ${shotsO}  \n` +
-            `• Dégagements : ${clearsB} / ${clearsO}  \n` +
-            `• Démolitions : ${demosB} / ${demosO}  \n` +
-            `• Rotation moyenne : ${rotB} / ${rotO}`,
+          name: '📊 Stats globales',
+          value:
+            `> Buts : ${goalsB} / ${goalsO}\n` +
+            `> Tirs cadrés : ${shotsB} / ${shotsO}\n` +
+            `> xG : ${xgB} / ${xgO}\n` +
+            `> Rotation moyenne : ${rotB} / ${rotO}`,
           inline: false
         }
       )
-      .setColor('#00b0f4')
+      .setImage('https://i.imgur.com/6wfoqn2.png')
+      .setColor('#a47864')
+      .setFooter({
+        text: 'Auusa.gg - Connecté. Compétitif. Collectif.',
+        iconURL: 'https://i.imgur.com/9FLBUiC.png'
+      })
       .setTimestamp();
 
     const btn = new ButtonBuilder()
@@ -216,7 +233,12 @@ app.post('/match', async (req, res) => {
       .setLabel('🧠 Analyse de la team')
       .setStyle(ButtonStyle.Secondary);
 
-    const row = new ActionRowBuilder().addComponents(btn, teamBtn);
+    const faceBtn = new ButtonBuilder()
+      .setCustomId('face_to_face_button')
+      .setLabel('🥊 Face-à-face')
+      .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder().addComponents(btn, teamBtn, faceBtn);
 
     const message = await channel.send({ embeds: [embed], components: [row] });
     await handleMatchResult(req.body, client);
@@ -275,7 +297,7 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isButton() && interaction.customId === 'details_joueur') {
     const players = matchData.get(interaction.message.id);
     if (!players) {
-      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      await interaction.reply({ content: 'Données indisponibles.', flags: MessageFlags.Ephemeral });
       return;
     }
     const options = players.map(p => ({
@@ -290,7 +312,7 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({
       content: 'Sélectionnez un joueur :',
       components: [new ActionRowBuilder().addComponents(select)],
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
@@ -298,13 +320,13 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isButton() && interaction.customId === 'team_analysis_button') {
     const players = matchData.get(interaction.message.id);
     if (!players) {
-      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      await interaction.reply({ content: 'Données indisponibles.', flags: MessageFlags.Ephemeral });
       return;
     }
     const username = (interaction.member?.nickname || interaction.user.username).toLowerCase();
     const player = players.find(p => p.name.toLowerCase() === username);
     if (!player) {
-      await interaction.reply({ content: "Impossible de déterminer ton équipe.", ephemeral: true });
+      await interaction.reply({ content: "Impossible de déterminer ton équipe.", flags: MessageFlags.Ephemeral });
       return;
     }
     const teamPlayers = players.filter(p => p.team === player.team);
@@ -319,7 +341,32 @@ client.on('interactionCreate', async interaction => {
       )
       .setColor('#00BFFF')
       .setTimestamp();
-    await interaction.reply({ embeds: [analysisEmbed], ephemeral: true });
+    await interaction.reply({ embeds: [analysisEmbed], flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  if (interaction.isButton() && interaction.customId === 'face_to_face_button') {
+    const players = matchData.get(interaction.message.id);
+    if (!players) {
+      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      return;
+    }
+    const options = players.map(p => ({
+      label: p.name,
+      value: p.name,
+      emoji: p.team === 0 ? '🔵' : '🔴'
+    }));
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`select_compare_${interaction.message.id}`)
+      .setPlaceholder('Choisissez deux joueurs')
+      .setMinValues(2)
+      .setMaxValues(2)
+      .addOptions(options);
+    await interaction.reply({
+      content: 'Sélectionnez deux joueurs à comparer :',
+      components: [new ActionRowBuilder().addComponents(select)],
+      ephemeral: true
+    });
     return;
   }
 
@@ -328,12 +375,12 @@ client.on('interactionCreate', async interaction => {
     const players = matchData.get(matchId);
     const selected = interaction.values[0];
     if (!players) {
-      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      await interaction.reply({ content: 'Données indisponibles.', flags: MessageFlags.Ephemeral });
       return;
     }
     const player = players.find(p => p.name === selected);
     if (!player) {
-      await interaction.reply({ content: 'Aucune donnée pour ce joueur.', ephemeral: true });
+      await interaction.reply({ content: 'Aucune donnée pour ce joueur.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -368,7 +415,7 @@ client.on('interactionCreate', async interaction => {
       .setColor('#00b0f4')
       .setTimestamp();
 
-    await interaction.reply({ embeds: [detailEmbed], ephemeral: true });
+    await interaction.reply({ embeds: [detailEmbed], flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -376,57 +423,64 @@ client.on('interactionCreate', async interaction => {
     const matchId = interaction.customId.replace('select_compare_', '');
     const players = matchData.get(matchId);
     if (!players) {
-      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      await interaction.reply({ content: 'Données indisponibles.', flags: MessageFlags.Ephemeral });
       return;
     }
     const [nameA, nameB] = interaction.values;
     const pA = players.find(p => p.name === nameA);
     const pB = players.find(p => p.name === nameB);
     if (!pA || !pB) {
-      await interaction.reply({ content: 'Aucune donnée pour ces joueurs.', ephemeral: true });
+      await interaction.reply({ content: 'Aucune donnée pour ces joueurs.', flags: MessageFlags.Ephemeral });
       return;
     }
-
-    const perfScore = p =>
-      (p.score || 0) +
-      (p.goals || 0) * 100 +
-      (p.assists || 0) * 50 +
-      (p.saves || 0) * 50 +
-      (p.shots || 0) * 10 +
-      ((typeof p.rotationQuality === 'number' && p.rotationQuality > 0 ? p.rotationQuality : 0) * 100) -
-      ((p.missedOpenGoals || 0) + (p.doubleCommits || 0)) * 20;
-
-    const errorRatio = p => {
-      const errors = (p.missedOpenGoals || 0) + (p.doubleCommits || 0);
-      const touches = p.ballTouches || 0;
-      return touches ? ((errors / touches) * 100) : 0;
-    };
-
-    const scoreA = perfScore(pA);
-    const scoreB = perfScore(pB);
-    const better = scoreA === scoreB ?
-      'Impact similaire.' : scoreA > scoreB ?
-      `${pA.name} a été le plus impactant.` : `${pB.name} a été le plus impactant.`;
+    const totalDemosA = (pA.offensiveDemos || 0) + (pA.defensiveDemos || 0);
+    const totalDemosB = (pB.offensiveDemos || 0) + (pB.defensiveDemos || 0);
+    const xgA = pA.shots || 0;
+    const xgB = pB.shots || 0;
 
     const compareEmbed = new EmbedBuilder()
-      .setTitle('🏅 Duel de performance')
-      .setDescription(`${pA.name} vs ${pB.name}`)
+      .setTitle(`🥊 Face-à-face — ${pB.name} vs ${pA.name}`)
       .addFields(
-        { name: 'Score de performance globale', value: `${scoreA.toFixed(0)} vs ${scoreB.toFixed(0)}` },
-        { name: 'Buts / assists / arrêts', value: `${pA.goals}/${pA.assists}/${pA.saves} vs ${pB.goals}/${pB.assists}/${pB.saves}` },
-        { name: 'Ratio d’erreurs', value: `${errorRatio(pA).toFixed(1)}% vs ${errorRatio(pB).toFixed(1)}%` },
-        { name: 'Utilisation du boost', value: `${(pA.boostFrequency ?? 0).toFixed(2)} vs ${(pB.boostFrequency ?? 0).toFixed(2)}` },
-        { name: 'Rotations & soutien', value: `Rot: ${Math.round((pA.rotationQuality ?? 0) * 100)}/100 | Passes: ${pA.usefulPasses ?? 0} vs Rot: ${Math.round((pB.rotationQuality ?? 0) * 100)}/100 | Passes: ${pB.usefulPasses ?? 0}` },
-        { name: 'Conclusion', value: better }
+        {
+          name: '⚔️ Offensif',
+          value:
+            `> 🏅 Buts : ${pB.goals ?? 0} / ${pA.goals ?? 0}\n` +
+            `> 🎯 Passes : ${pB.assists ?? 0} / ${pA.assists ?? 0}\n` +
+            `> 🚀 xG : ${xgB} / ${xgA}`,
+          inline: true
+        },
+        {
+          name: '🛡️ Défensif',
+          value:
+            `> 🧱 Saves : ${pB.saves ?? 0} (${pB.clutchSaves ?? 0} clutch) / ${pA.saves ?? 0}\n` +
+            `> ⚔️ Duels gagnés : ${pB.defensiveChallenges ?? 0} / ${pA.defensiveChallenges ?? 0}\n` +
+            `> 💥 Démos : ${totalDemosB} (${pB.offensiveDemos ?? 0} off., ${pB.defensiveDemos ?? 0} déf.) / ${totalDemosA} (${pA.offensiveDemos ?? 0} off., ${pA.defensiveDemos ?? 0} déf.)`,
+          inline: true
+        },
+        {
+          name: '🔄 Rotation',
+          value:
+            `> ♻️ Qualité : ${Math.round((pB.rotationQuality ?? 0) * 100)}% / ${Math.round((pA.rotationQuality ?? 0) * 100)}%\n` +
+            `> ✂️ Cuts : ${pB.cuts ?? 0} / ${pA.cuts ?? 0}`,
+          inline: false
+        }
       )
-      .setColor('#800080')
+      .setImage('https://i.imgur.com/1k6Kx9o.png')
+      .setColor('#a47864')
+      .setFooter({
+        text: 'Auusa.gg - Connecté. Compétitif. Collectif.',
+        iconURL: 'https://i.imgur.com/9FLBUiC.png'
+      })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [compareEmbed], ephemeral: true });
+    await interaction.reply({ embeds: [compareEmbed], flags: MessageFlags.Ephemeral });
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`API en écoute sur le port ${PORT}`));
+
+client.on('error', console.error);
+process.on('unhandledRejection', err => console.error('Unhandled promise rejection:', err));
 
 client.login(process.env.DISCORD_TOKEN);

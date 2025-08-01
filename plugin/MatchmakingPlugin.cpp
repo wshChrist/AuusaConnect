@@ -10,6 +10,7 @@
 #include <cmath>
 #include <algorithm>
 #include <utility>
+#include <thread>
 
 using json = nlohmann::json;
 
@@ -421,9 +422,22 @@ void MatchmakingPlugin::OnGameEnd()
     if (debugEnabled)
         Log("[DEBUG] Envoi des stats : " + std::to_string(players.size()) + " joueurs");
 
-    cpr::Response r = cpr::Post(cpr::Url{"http://localhost:3000/match"},
-                                cpr::Body{payload.dump()},
-                                cpr::Header{{"Content-Type", "application/json"}});
+    gameWrapper->SetTimeout([payload = std::move(payload)]() mutable
+    {
+        std::thread([p = std::move(payload)]() mutable
+        {
+            try
+            {
+                cpr::Post(cpr::Url{"http://localhost:3000/match"},
+                          cpr::Body{p.dump()},
+                          cpr::Header{{"Content-Type", "application/json"}});
+            }
+            catch (...)
+            {
+                // Ignore network errors
+            }
+        }).detach();
+    }, 1.5f);
 }
 
 void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string /*eventName*/)
