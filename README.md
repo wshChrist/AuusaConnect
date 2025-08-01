@@ -56,3 +56,7 @@ Chaque utilisateur ne peut appartenir qu'à une seule équipe. Une contrainte d'
 | `score`  | `text`     |                    |
 | `date`   | `timestamp`|                    |
 | `winner` | `uuid`     | référence `teams.id`|
+
+## Matchmaking vocal avancé
+
+Les vocaux publics servant de point de départ au matchmaking doivent respecter la forme `🎮│XvX` (ex. `🎮│1v1`, `🎮│2v2`). Le bot calcule automatiquement le nombre de joueurs attendus à partir de ce nom pour créer les salons privés et enregistrer la session dans Supabase.
