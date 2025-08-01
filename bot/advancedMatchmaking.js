@@ -15,6 +15,9 @@ async function sbRequest(method, table, { query = '', body } = {}) {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     throw new Error('SUPABASE_URL et SUPABASE_KEY doivent être définies');
   }
+  if (method === 'POST' && !query) {
+    query = 'select=*';
+  }
   const url = `${SUPABASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`;
   let res;
   try {
