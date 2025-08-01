@@ -21,12 +21,13 @@ import { fileURLToPath } from 'url';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const BASE_URL = SUPABASE_URL?.replace(/\/rest\/v1\/?$/, '');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CHANNEL_FILE = path.join(__dirname, 'channel.json');
 
 async function sbRequest(method, table, { query = '', body } = {}) {
-  const url = `${SUPABASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`;
+  const url = `${BASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`;
   const res = await fetch(url, {
     method,
     headers: {

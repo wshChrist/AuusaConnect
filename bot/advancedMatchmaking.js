@@ -10,6 +10,8 @@ import {
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
+// Permet d'accepter SUPABASE_URL avec ou sans le segment /rest/v1
+const BASE_URL = SUPABASE_URL?.replace(/\/rest\/v1\/?$/, '');
 
 async function sbRequest(method, table, { query = '', body } = {}) {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -18,7 +20,7 @@ async function sbRequest(method, table, { query = '', body } = {}) {
   if (method === 'POST' && !query) {
     query = 'select=*';
   }
-  const url = `${SUPABASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`;
+  const url = `${BASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`;
   let res;
   try {
     res = await fetch(url, {
