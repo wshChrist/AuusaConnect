@@ -34,13 +34,18 @@ async function sbRequest(method, table, { query = '', body } = {}) {
   if (!res.ok) {
     let msg;
     try {
-      msg = (await res.json()).message;
+      const data = await res.json();
+      msg = data.message || JSON.stringify(data);
     } catch {
-      msg = res.statusText;
+      msg = await res.text();
     }
-    throw new Error(msg);
+    throw new Error(`Supabase ${method} ${table} ${res.status} : ${msg}`);
   }
-  return res.json();
+  try {
+    return await res.json();
+  } catch (err) {
+    throw new Error(`Réponse invalide de Supabase : ${err.message}`);
+  }
 }
 
 const activeMatches = new Map(); // matchId -> data
