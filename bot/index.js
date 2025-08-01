@@ -233,7 +233,12 @@ app.post('/match', async (req, res) => {
       .setLabel('🧠 Analyse de la team')
       .setStyle(ButtonStyle.Secondary);
 
-    const row = new ActionRowBuilder().addComponents(btn, teamBtn);
+    const faceBtn = new ButtonBuilder()
+      .setCustomId('face_to_face_button')
+      .setLabel('🥊 Face-à-face')
+      .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder().addComponents(btn, teamBtn, faceBtn);
 
     const message = await channel.send({ embeds: [embed], components: [row] });
     await handleMatchResult(req.body, client);
@@ -340,6 +345,31 @@ client.on('interactionCreate', async interaction => {
     return;
   }
 
+  if (interaction.isButton() && interaction.customId === 'face_to_face_button') {
+    const players = matchData.get(interaction.message.id);
+    if (!players) {
+      await interaction.reply({ content: 'Données indisponibles.', ephemeral: true });
+      return;
+    }
+    const options = players.map(p => ({
+      label: p.name,
+      value: p.name,
+      emoji: p.team === 0 ? '🔵' : '🔴'
+    }));
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`select_compare_${interaction.message.id}`)
+      .setPlaceholder('Choisissez deux joueurs')
+      .setMinValues(2)
+      .setMaxValues(2)
+      .addOptions(options);
+    await interaction.reply({
+      content: 'Sélectionnez deux joueurs à comparer :',
+      components: [new ActionRowBuilder().addComponents(select)],
+      ephemeral: true
+    });
+    return;
+  }
+
   if (interaction.isStringSelectMenu() && interaction.customId.startsWith('select_joueur_detail_')) {
     const matchId = interaction.customId.replace('select_joueur_detail_', '');
     const players = matchData.get(matchId);
@@ -403,40 +433,44 @@ client.on('interactionCreate', async interaction => {
       await interaction.reply({ content: 'Aucune donnée pour ces joueurs.', flags: MessageFlags.Ephemeral });
       return;
     }
-
-    const perfScore = p =>
-      (p.score || 0) +
-      (p.goals || 0) * 100 +
-      (p.assists || 0) * 50 +
-      (p.saves || 0) * 50 +
-      (p.shots || 0) * 10 +
-      ((typeof p.rotationQuality === 'number' && p.rotationQuality > 0 ? p.rotationQuality : 0) * 100) -
-      ((p.missedOpenGoals || 0) + (p.doubleCommits || 0)) * 20;
-
-    const errorRatio = p => {
-      const errors = (p.missedOpenGoals || 0) + (p.doubleCommits || 0);
-      const touches = p.ballTouches || 0;
-      return touches ? ((errors / touches) * 100) : 0;
-    };
-
-    const scoreA = perfScore(pA);
-    const scoreB = perfScore(pB);
-    const better = scoreA === scoreB ?
-      'Impact similaire.' : scoreA > scoreB ?
-      `${pA.name} a été le plus impactant.` : `${pB.name} a été le plus impactant.`;
+    const totalDemosA = (pA.offensiveDemos || 0) + (pA.defensiveDemos || 0);
+    const totalDemosB = (pB.offensiveDemos || 0) + (pB.defensiveDemos || 0);
+    const xgA = pA.shots || 0;
+    const xgB = pB.shots || 0;
 
     const compareEmbed = new EmbedBuilder()
-      .setTitle('🏅 Duel de performance')
-      .setDescription(`${pA.name} vs ${pB.name}`)
+      .setTitle(`🥊 Face-à-face — ${pB.name} vs ${pA.name}`)
       .addFields(
-        { name: 'Score de performance globale', value: `${scoreA.toFixed(0)} vs ${scoreB.toFixed(0)}` },
-        { name: 'Buts / assists / arrêts', value: `${pA.goals}/${pA.assists}/${pA.saves} vs ${pB.goals}/${pB.assists}/${pB.saves}` },
-        { name: 'Ratio d’erreurs', value: `${errorRatio(pA).toFixed(1)}% vs ${errorRatio(pB).toFixed(1)}%` },
-        { name: 'Utilisation du boost', value: `${(pA.boostFrequency ?? 0).toFixed(2)} vs ${(pB.boostFrequency ?? 0).toFixed(2)}` },
-        { name: 'Rotations & soutien', value: `Rot: ${Math.round((pA.rotationQuality ?? 0) * 100)}/100 | Passes: ${pA.usefulPasses ?? 0} vs Rot: ${Math.round((pB.rotationQuality ?? 0) * 100)}/100 | Passes: ${pB.usefulPasses ?? 0}` },
-        { name: 'Conclusion', value: better }
+        {
+          name: '⚔️ Offensif',
+          value:
+            `> 🏅 Buts : ${pB.goals ?? 0} / ${pA.goals ?? 0}\n` +
+            `> 🎯 Passes : ${pB.assists ?? 0} / ${pA.assists ?? 0}\n` +
+            `> 🚀 xG : ${xgB} / ${xgA}`,
+          inline: true
+        },
+        {
+          name: '🛡️ Défensif',
+          value:
+            `> 🧱 Saves : ${pB.saves ?? 0} (${pB.clutchSaves ?? 0} clutch) / ${pA.saves ?? 0}\n` +
+            `> ⚔️ Duels gagnés : ${pB.defensiveChallenges ?? 0} / ${pA.defensiveChallenges ?? 0}\n` +
+            `> 💥 Démos : ${totalDemosB} (${pB.offensiveDemos ?? 0} off., ${pB.defensiveDemos ?? 0} déf.) / ${totalDemosA} (${pA.offensiveDemos ?? 0} off., ${pA.defensiveDemos ?? 0} déf.)`,
+          inline: true
+        },
+        {
+          name: '🔄 Rotation',
+          value:
+            `> ♻️ Qualité : ${Math.round((pB.rotationQuality ?? 0) * 100)}% / ${Math.round((pA.rotationQuality ?? 0) * 100)}%\n` +
+            `> ✂️ Cuts : ${pB.cuts ?? 0} / ${pA.cuts ?? 0}`,
+          inline: false
+        }
       )
-      .setColor('#800080')
+      .setImage('https://i.imgur.com/1k6Kx9o.png')
+      .setColor('#a47864')
+      .setFooter({
+        text: 'Auusa.gg - Connecté. Compétitif. Collectif.',
+        iconURL: 'https://i.imgur.com/9FLBUiC.png'
+      })
       .setTimestamp();
 
     await interaction.reply({ embeds: [compareEmbed], flags: MessageFlags.Ephemeral });
