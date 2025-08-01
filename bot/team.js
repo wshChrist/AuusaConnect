@@ -133,6 +133,51 @@ async function buildTeamEmbed(team) {
   return embed;
 }
 
+async function buildLeaderboardEmbed(page = 0) {
+  const rows = await sbRequest('GET', 'teams', { query: `order=elo.desc&limit=6&offset=${page * 5}` });
+  const hasNext = rows.length > 5;
+  const list = rows.slice(0, 5);
+  const embed = new EmbedBuilder()
+    .setTitle('🏆 Classement des équipes — Saison Alpha')
+    .setDescription('> 📊 Classement compétitif des équipes en temps réel.')
+    .setColor('#a47864')
+    .setImage('https://i.imgur.com/oyQE5I0.png');
+  const medals = ['🥇', '🥈', '🥉'];
+  for (let i = 0; i < list.length; i++) {
+    const t = list[i];
+    const index = page * 5 + i + 1;
+    const wins = (await sbRequest('GET', 'match_history', { query: `team_a=eq.${t.id}&winner=eq.${t.id}` })).length;
+    const losses = (await sbRequest('GET', 'match_history', { query: `team_a=eq.${t.id}&winner=neq.${t.id}` })).filter(m => m.winner).length;
+    const ratio = wins + losses ? Math.round((wins / (wins + losses)) * 100) : 0;
+    const icon = medals[index - 1] || '🔹';
+    embed.addFields({ name: `• ${icon} ${index}. ${t.name}`, value: `> 💠 Élo : ${t.elo} — 🏆 V : ${wins} — ❌ D : ${losses} — 📊 ${ratio}%`, inline: false });
+  }
+  return { embed, hasNext };
+}
+
+async function showLeaderboard(interaction, page, update = false) {
+  const { embed, hasNext } = await buildLeaderboardEmbed(page);
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`team_lb_prev_${page}`)
+      .setLabel('⬅️ Précédent')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page === 0),
+    new ButtonBuilder()
+      .setCustomId(`team_lb_next_${page}`)
+      .setLabel('➡️ Suivant')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(!hasNext)
+  );
+  if (update) {
+    await interaction.update({ embeds: [embed], components: [row] });
+  } else if (interaction.deferred || interaction.replied) {
+    await interaction.editReply({ embeds: [embed], components: [row] });
+  } else {
+    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+  }
+}
+
 async function showMainMenu(interaction) {
   const team = await findTeamByUser(interaction.user.id);
   if (!team) {
@@ -247,22 +292,13 @@ export function setupTeam(client) {
             .setColor('#a47864');
           await interaction.reply({ embeds: [embed], components: rows, ephemeral: true });
         } else if (interaction.customId === 'team_leaderboard') {
-          const rows = await sbRequest('GET', 'teams', { query: 'order=elo.desc&limit=5' });
-          const embed = new EmbedBuilder()
-            .setTitle('🏆 Classement des équipes — Saison Alpha')
-            .setDescription('> 📊 Classement compétitif des équipes en temps réel.')
-            .setColor('#a47864')
-            .setImage('https://i.imgur.com/oyQE5I0.png');
-          const medals = ['🥇', '🥈', '🥉'];
-          for (let i = 0; i < rows.length; i++) {
-            const t = rows[i];
-            const wins = (await sbRequest('GET', 'match_history', { query: `team_a=eq.${t.id}&winner=eq.${t.id}` })).length;
-            const losses = (await sbRequest('GET', 'match_history', { query: `team_a=eq.${t.id}&winner=neq.${t.id}` })).filter(m => m.winner).length;
-            const ratio = wins + losses ? Math.round((wins / (wins + losses)) * 100) : 0;
-            const icon = medals[i] || '🔹';
-            embed.addFields({ name: `• ${icon} ${i + 1}. ${t.name}`, value: `> 💠 Élo : ${t.elo} — 🏆 V : ${wins} — ❌ D : ${losses} — 📊 ${ratio}%`, inline: false });
-          }
-          await interaction.reply({ embeds: [embed], ephemeral: true });
+          await showLeaderboard(interaction, 0);
+        } else if (interaction.customId.startsWith('team_lb_prev_')) {
+          const page = parseInt(interaction.customId.replace('team_lb_prev_', ''), 10);
+          await showLeaderboard(interaction, Math.max(page - 1, 0), true);
+        } else if (interaction.customId.startsWith('team_lb_next_')) {
+          const page = parseInt(interaction.customId.replace('team_lb_next_', ''), 10);
+          await showLeaderboard(interaction, page + 1, true);
         } else if (interaction.customId === 'team_search') {
           const modal = new ModalBuilder()
             .setTitle('Rechercher une équipe')
