@@ -136,13 +136,21 @@ app.post('/match', async (req, res) => {
     teamOrange = 'Orange',
     scorers = [],
     mvp = '',
-    players = []
+    players = [],
+    duration = '5:00',
+    map = 'Inconnu'
   } = req.body;
   if (channelId && client.channels.cache.has(channelId)) {
     const channel = client.channels.cache.get(channelId);
 
     const bluePlayers = players.filter(p => p.team === 0);
     const orangePlayers = players.filter(p => p.team === 1);
+
+    const matchDateStr = new Date().toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
 
     const { player: motmPlayer } = calculateMotm(players);
 
@@ -172,39 +180,47 @@ app.post('/match', async (req, res) => {
       rotationScore(orangePlayers)
     );
 
+    const xGBlue = (sum(bluePlayers, 'shots') * 0.25).toFixed(1);
+    const xGOrange = (sum(orangePlayers, 'shots') * 0.25).toFixed(1);
+    const [xgB, xgO] = boldIfGreater(xGBlue, xGOrange);
+
     const embed = new EmbedBuilder()
-      .setTitle('🏁 **Match terminé !**')
+      .setTitle('🏁 Match terminé !')
       .setDescription(
-        `**Score final**  \n🔵 ${teamBlue} ${scoreBlue} - ${scoreOrange} ${teamOrange} 🔶`
+        `> 🕒 Durée : ${duration}\n> 📍 Carte : ${map}\n> 📅 Date : ${matchDateStr}`
       )
       .addFields(
         {
-          name: '**📋 Compositions**',
-          value: `🔵 ${teamBlue} : ${bluePlayers
-            .map(p => p.name)
-            .join(', ')}  \n🔶 ${teamOrange} : ${orangePlayers
-            .map(p => p.name)
-            .join(', ')}`,
+          name: '🟦 Blue Team',
+          value: `> 👥 : ${bluePlayers.map(p => p.name).join(', ') || 'Aucun.'}`,
+          inline: true
+        },
+        {
+          name: '🟧 Orange Team',
+          value: `> 👥 : ${orangePlayers.map(p => p.name).join(', ') || 'Aucun.'}`,
+          inline: true
+        },
+        {
+          name: '🏅 Homme du match :',
+          value: `> **${motmPlayer ? motmPlayer.name : 'Aucun'}** **(${motmNote}/10)**`,
           inline: false
         },
         {
-          name: `👑 **Homme du match** : ${
-            motmPlayer ? motmPlayer.name : 'Aucun'
-          } (${motmPlayer ? motmNote : '0'}/10)`,
-          value: '',
-          inline: false
-        },
-        {
-          name: '📊 **Stats globales**',
-          value: `• Buts : ${goalsB} / ${goalsO}  \n` +
-            `• Tirs cadrés : ${shotsB} / ${shotsO}  \n` +
-            `• Dégagements : ${clearsB} / ${clearsO}  \n` +
-            `• Démolitions : ${demosB} / ${demosO}  \n` +
-            `• Rotation moyenne : ${rotB} / ${rotO}`,
+          name: '📊 Stats globales',
+          value:
+            `> Buts : ${goalsB} / ${goalsO}\n` +
+            `> Tirs cadrés : ${shotsB} / ${shotsO}\n` +
+            `> xG : ${xgB} / ${xgO}\n` +
+            `> Rotation moyenne : ${rotB} / ${rotO}`,
           inline: false
         }
       )
-      .setColor('#00b0f4')
+      .setImage('https://i.imgur.com/6wfoqn2.png')
+      .setColor('#a47864')
+      .setFooter({
+        text: 'Auusa.gg - Connecté. Compétitif. Collectif.',
+        iconURL: 'https://i.imgur.com/9FLBUiC.png'
+      })
       .setTimestamp();
 
     const btn = new ButtonBuilder()
