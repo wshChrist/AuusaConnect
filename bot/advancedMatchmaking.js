@@ -10,29 +10,47 @@ import {
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
+// Permet d'accepter SUPABASE_URL avec ou sans le segment /rest/v1
+const BASE_URL = SUPABASE_URL?.replace(/\/rest\/v1\/?$/, '');
 
 async function sbRequest(method, table, { query = '', body } = {}) {
-  const url = `${SUPABASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`;
-  const res = await fetch(url, {
-    method,
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation'
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error('SUPABASE_URL et SUPABASE_KEY doivent être définies');
+  }
+  if (method === 'POST' && !query) {
+    query = 'select=*';
+  }
+  const url = `${BASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation'
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  } catch (err) {
+    throw new Error(`Échec de la requête vers Supabase: ${err.message}`);
+  }
   if (!res.ok) {
     let msg;
     try {
-      msg = (await res.json()).message;
+      const data = await res.json();
+      msg = data.message || JSON.stringify(data);
     } catch {
-      msg = res.statusText;
+      msg = await res.text();
     }
-    throw new Error(msg);
+    throw new Error(`Supabase ${method} ${table} ${res.status} : ${msg}`);
   }
-  return res.json();
+  try {
+    return await res.json();
+  } catch (err) {
+    throw new Error(`Réponse invalide de Supabase : ${err.message}`);
+  }
 }
 
 const activeMatches = new Map(); // matchId -> data
