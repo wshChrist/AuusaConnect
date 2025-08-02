@@ -17,9 +17,9 @@
 
 using json = nlohmann::json;
 
-static const std::string SUPABASE_URL = "https://TON_PROJECT.supabase.co/rest/v1/match_instructions";
-static const std::string SUPABASE_API_KEY = "TON_API_KEY";
-static const std::string SUPABASE_JWT = "TON_JWT";
+static const std::string SUPABASE_URL = "https://srszelabkxvdrmorfovm.supabase.co/rest/v1/match_instructions";
+static const std::string SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNyc3plbGFia3h2ZHJtb3Jmb3ZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAwNDQxMDUsImV4cCI6MjA2NTYyMDEwNX0.ixXgOg6eznTi3YES_sYnYQFEBS17oGSpjd8qwxHEQ94";
+static const std::string SUPABASE_JWT = "qWPM7U+aBW9Y0F5+LqLGDa5em2kK9HR/3J8+pMzb5oyl5PeI0sfR0/38WeWTqA9Z5KpeEkzt7V+SBqIwjCFUsA==";
 
 struct PlayerStats
 {
