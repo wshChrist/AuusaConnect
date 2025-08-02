@@ -32,7 +32,9 @@ affiché dans la console BakkesMod avec le nom du joueur et le temps de jeu.
 
 ## Fonctionnement
 
-Le plugin récupère les informations de fin de match et les envoie au bot Discord via une requête HTTP POST vers `http://34.32.118.126:3000`.
+Le plugin récupère d'abord les instructions de match depuis Supabase, puis envoie les
+informations de fin de match au bot Discord via une requête HTTP POST vers
+`http://34.32.118.126:3000`.
 Il transmet notamment :
 
 - le score global des équipes ;
