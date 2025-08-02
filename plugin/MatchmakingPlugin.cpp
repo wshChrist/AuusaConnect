@@ -422,7 +422,7 @@ void MatchmakingPlugin::OnGameEnd()
     if (debugEnabled)
         Log("[DEBUG] Envoi des stats : " + std::to_string(players.size()) + " joueurs");
 
-    gameWrapper->SetTimeout([payload = std::move(payload)]() mutable
+    gameWrapper->SetTimeout([payload = std::move(payload)](GameWrapper* /*gw*/) mutable
     {
         std::thread([p = std::move(payload)]() mutable
         {
