@@ -253,7 +253,7 @@ export function setupAdvancedMatchmaking(client) {
         return interaction.reply({ content: 'Seul l\'hôte peut utiliser cette commande.', ephemeral: true });
       const name = interaction.options.getString('nom');
       const pwd = interaction.options.getString('password');
-      await sbRequest('PATCH', `match_sessions?id=eq.${matchId}`, { body: { RL_name: name, RL_password: pwd, status: 'ready' } }).catch(() => {});
+      await sbRequest('PATCH', `match_sessions?id=eq.${matchId}`, { body: { rl_name: name, rl_password: pwd, status: 'ready' } }).catch(() => {});
       await interaction.reply({ content: 'Infos enregistrées.', ephemeral: true });
       const text = interaction.channel;
       if (text)
