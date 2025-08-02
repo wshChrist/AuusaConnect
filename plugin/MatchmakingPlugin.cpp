@@ -219,7 +219,11 @@ void MatchmakingPlugin::onLoad()
             std::string password = data.value("password", "");
             auto mm = gameWrapper->GetMatchmakingWrapper();
             if (mm) {
-                mm.CreatePrivateMatch(name, password);
+                CustomMatchSettings settings{};
+                settings.ServerName = name;
+                settings.Password = password;
+                settings.MapName = "Stadium_P";
+                mm.CreatePrivateMatch(Region::EU, static_cast<int>(PlaylistIds::PrivateMatch), settings);
                 res.status = 200;
                 res.set_content("ok", "text/plain");
             } else {
@@ -274,11 +278,11 @@ void MatchmakingPlugin::PollSupabase()
                 return;
             std::string server = instr.value("server_name", "");
             std::string password = instr.value("password", "");
-            gameWrapper->Execute([this, server, password]() {
-                auto mm = gameWrapper->GetMatchmakingWrapper();
+            gameWrapper->Execute([this, server, password](GameWrapper* gw) {
+                auto mm = gw->GetMatchmakingWrapper();
                 if (mm)
                     mm.JoinPrivateMatch(server, password);
-                gameWrapper->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie rejointe automatiquement", "default", 3.0f);
+                gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie rejointe automatiquement", "default", 3.0f);
             });
             cpr::Delete(cpr::Url{SUPABASE_URL}, cpr::Parameters{{"player_id", "eq." + playerId}}, headers);
         }
@@ -715,7 +719,8 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
         dir.Z = 0.f;
         if (((team == 0 && ballVel.Y > 0) || (team == 1 && ballVel.Y < 0)) && dir.magnitude() > 0.1f && toGoal.magnitude() > 0.1f)
         {
-            float ang = acosf(std::clamp(dir.normalize().dot(toGoal.normalize()), -1.f, 1.f));
+            float dotVal = dir.normalize().dot(toGoal.normalize());
+            float ang = acosf(std::clamp(dotVal, -1.f, 1.f));
             if (ang < 0.35f && std::fabs(ballPos.X) < 900.f)
                 shot = true;
         }
@@ -757,8 +762,10 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
         float distance = (pos - goal).magnitude();
         Vector toGoal = goal - ballPos;
         float angle = 0.f;
-        if (ballVel.magnitude() > 0.1f && toGoal.magnitude() > 0.1f)
-            angle = acosf(std::clamp(ballVel.normalize().dot(toGoal.normalize()), -1.f, 1.f));
+        if (ballVel.magnitude() > 0.1f && toGoal.magnitude() > 0.1f) {
+            float dotVal = ballVel.normalize().dot(toGoal.normalize());
+            angle = acosf(std::clamp(dotVal, -1.f, 1.f));
+        }
 
         float xg = ComputeXGAdvanced(distance, angle, ballVel.magnitude(), playerBoost > 0.f, isAerial, defenders, hardRebound, panicShot, openNet, quality);
         ps.xgAttempts.push_back(xg);
