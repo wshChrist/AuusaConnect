@@ -257,6 +257,9 @@ async function handleBroadcast(interaction) {
   let embedData;
   try {
     embedData = JSON.parse(embedJson);
+    if (typeof embedData.description !== 'string') {
+      embedData.description = '';
+    }
   } catch (err) {
     await interaction.editReply({ content: 'Embed JSON invalide.' });
     return;
