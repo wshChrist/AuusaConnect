@@ -261,14 +261,17 @@ async function handleBroadcast(interaction) {
         ch => ch.type === ChannelType.GuildText && ch.parentId === category.id
       );
     }
-    if (channel) {
-      const msg = await channel.send({ embeds: [embed] }).catch(() => null);
-      if (msg && mode === 'binaire') {
-        await msg.react('✅').catch(() => {});
-        await msg.react('❌').catch(() => {});
-      }
-      if (msg) sentTo.push(t.name);
+    if (!channel) {
+      await interaction.followUp({ content: `Salon introuvable pour ${t.name}`, ephemeral: true });
+      console.warn(`Salon introuvable pour ${t.name}`);
+      continue;
     }
+    const msg = await channel.send({ embeds: [embed] }).catch(() => null);
+    if (msg && mode === 'binaire') {
+      await msg.react('✅').catch(() => {});
+      await msg.react('❌').catch(() => {});
+    }
+    if (msg) sentTo.push(t.name);
   }
 
   const logChannel = guild.channels.cache.find(c => c.name.includes('logs-broadcasts'));
