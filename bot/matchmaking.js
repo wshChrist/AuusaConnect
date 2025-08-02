@@ -9,8 +9,8 @@ import {
 
 export function setupMatchmaking(client) {
   const modes = {
-    '🎮 Ranked 1v1': 2,
-    '🎮 Ranked 2v2': 4,
+    '1v1': 2,
+    '2v2': 4,
   };
   const banRoleName = '🚫 Banni Ranked';
   const bakkesRole = '🧩 BakkesMod';
@@ -28,8 +28,11 @@ export function setupMatchmaking(client) {
   }, 60 * 1000);
 
   client.on('voiceStateUpdate', async (oldState, newState) => {
-    if (!newState.channel || !modes[newState.channel.name]) return;
-    const required = modes[newState.channel.name];
+    if (!newState.channel) return;
+    const name = newState.channel.name;
+    const mode = Object.keys(modes).find(k => name.includes(k));
+    if (!mode) return;
+    const required = modes[mode];
     const members = newState.channel.members.filter(m => !m.user.bot);
     if (members.size === required) {
       startMatch(newState.channel, [...members.values()]);
