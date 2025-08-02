@@ -208,6 +208,71 @@ async function showMainMenu(interaction) {
   await interaction.editReply({ embeds: [embed], components: [row1, row2] });
 }
 
+async function handleBroadcast(interaction) {
+  const guild = interaction.guild;
+  if (!guild) {
+    await interaction.reply({ content: 'Commande uniquement sur un serveur.', ephemeral: true });
+    return;
+  }
+  const perms = interaction.memberPermissions || interaction.member?.permissions;
+  if (!perms?.has(PermissionsBitField.Flags.ManageMessages)) {
+    await interaction.reply({ content: 'Permissions insuffisantes.', ephemeral: true });
+    return;
+  }
+  const target = interaction.options.getString('target');
+  const content = interaction.options.getString('message');
+  const title = interaction.options.getString('titre') || '📢 Annonce officielle';
+
+  await interaction.reply({ content: 'Envoi en cours...', ephemeral: true });
+
+  let teams = [];
+  if (target.toLowerCase() === 'all') {
+    teams = await sbRequest('GET', 'teams');
+  } else {
+    const rows = await sbRequest('GET', 'teams', { query: `name=eq.${encodeURIComponent(target)}` });
+    if (!rows.length) {
+      await interaction.editReply({ content: "Équipe introuvable." });
+      return;
+    }
+    teams = [rows[0]];
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(`> ${content}`)
+    .addFields({ name: 'Envoyé par', value: `<@${interaction.user.id}>` })
+    .setColor('#f9a602')
+    .setFooter({ text: 'Annonce officielle — réservée à votre équipe' })
+    .setTimestamp();
+
+  const sentTo = [];
+  for (const t of teams) {
+    const slug = t.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const channel = guild.channels.cache.find(
+      c => c.type === ChannelType.GuildText && c.name.includes(slug)
+    );
+    if (channel) {
+      await channel.send({ embeds: [embed] }).catch(() => {});
+      sentTo.push(t.name);
+    }
+  }
+
+  const logChannel = guild.channels.cache.find(c => c.name.includes('logs-broadcasts'));
+  if (logChannel) {
+    const logEmbed = new EmbedBuilder()
+      .setTitle('Nouveau broadcast')
+      .setDescription(
+        `Message envoyé par <@${interaction.user.id}> à ${sentTo.join(', ') || 'aucune équipe'}.`
+      )
+      .addFields({ name: 'Contenu', value: content })
+      .setColor('#f9a602')
+      .setTimestamp();
+    await logChannel.send({ embeds: [logEmbed] });
+  }
+
+  await interaction.editReply({ content: `Message envoyé à ${sentTo.join(', ') || 'aucune équipe'}.` });
+}
+
 export function setupTeam(client) {
   client.once('ready', async () => {
     try {
@@ -215,7 +280,32 @@ export function setupTeam(client) {
         name: 'team',
         description: 'Gestion des équipes',
         options: [
-          { name: 'menu', description: 'Ouvrir le menu', type: ApplicationCommandOptionType.Subcommand }
+          { name: 'menu', description: 'Ouvrir le menu', type: ApplicationCommandOptionType.Subcommand },
+          {
+            name: 'broadcast',
+            description: 'Envoyer un message officiel à une équipe',
+            type: ApplicationCommandOptionType.Subcommand,
+            options: [
+              {
+                name: 'target',
+                description: '"all" ou nom de l\'équipe',
+                type: ApplicationCommandOptionType.String,
+                required: true
+              },
+              {
+                name: 'message',
+                description: 'Contenu de l\'annonce',
+                type: ApplicationCommandOptionType.String,
+                required: true
+              },
+              {
+                name: 'titre',
+                description: 'Titre personnalisé',
+                type: ApplicationCommandOptionType.String,
+                required: false
+              }
+            ]
+          }
         ]
       });
     } catch (err) {
@@ -230,6 +320,8 @@ export function setupTeam(client) {
         if (sub === 'menu') {
           await interaction.deferReply({ ephemeral: true });
           await showMainMenu(interaction);
+        } else if (sub === 'broadcast') {
+          await handleBroadcast(interaction);
         }
         return;
       }
