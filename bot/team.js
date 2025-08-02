@@ -257,8 +257,8 @@ async function handleBroadcast(interaction) {
   let embedData;
   try {
     embedData = JSON.parse(embedJson);
-    if (typeof embedData.description !== 'string') {
-      embedData.description = '';
+    if (typeof embedData.description !== 'string' || embedData.description.trim() === '') {
+      embedData.description = '\u200B';
     }
   } catch (err) {
     await interaction.editReply({ content: 'Embed JSON invalide.' });
@@ -306,7 +306,6 @@ async function handleBroadcast(interaction) {
         return;
       }
     }
-    if (msg) sentTo.push(t.name);
   }
 
   const logChannel = guild.channels.cache.find(c => c.name.includes('logs-broadcasts'));
