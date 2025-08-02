@@ -1,5 +1,5 @@
 {
-  "SUPABASE_URL": "https://TON_PROJECT.supabase.co/rest/v1/match_instructions",
+  "SUPABASE_URL": "https://TON_PROJECT.supabase.co/rest/v1/match_sessions",
   "SUPABASE_API_KEY": "TON_API_KEY",
   "SUPABASE_JWT": "TON_JWT"
 }

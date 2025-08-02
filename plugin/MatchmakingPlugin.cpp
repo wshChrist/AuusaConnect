@@ -13,7 +13,6 @@
 #include <utility>
 #include <thread>
 #include <memory>
-#include "httplib.h"
 
 using json = nlohmann::json;
 
@@ -106,8 +105,6 @@ private:
     bool debugEnabled = false;
     std::ofstream logFile;
     void Log(const std::string& msg);
-    std::unique_ptr<httplib::Server> httpServer;
-    std::thread httpThread;
     std::string supabaseUrl;
     std::string supabaseApiKey;
     std::string supabaseJwt;
@@ -212,35 +209,6 @@ void MatchmakingPlugin::onLoad()
     LoadConfig();
     HookEvents();
 
-    httpServer = std::make_unique<httplib::Server>();
-    httpServer->Post("/start", [this](const httplib::Request& req, httplib::Response& res) {
-        try {
-            auto data = json::parse(req.body);
-            std::string name = data.value("name", "");
-            std::string password = data.value("password", "");
-            auto mm = gameWrapper->GetMatchmakingWrapper();
-            if (mm) {
-                CustomMatchSettings settings{};
-                settings.ServerName = name;
-                settings.Password = password;
-                settings.MapName = "Stadium_P";
-                mm.CreatePrivateMatch(Region::EU, static_cast<int>(PlaylistIds::PrivateMatch), settings);
-                res.status = 200;
-                res.set_content("ok", "text/plain");
-            } else {
-                res.status = 500;
-                res.set_content("no wrapper", "text/plain");
-            }
-        } catch (...) {
-            res.status = 400;
-            res.set_content("bad request", "text/plain");
-        }
-    });
-
-    httpThread = std::thread([this]() {
-        httpServer->listen("0.0.0.0", 6969);
-    });
-
     PollSupabase();
 }
 
@@ -249,10 +217,6 @@ void MatchmakingPlugin::onUnload()
     Log("Plugin unloaded");
     if (logFile.is_open())
         logFile.close();
-    if (httpServer)
-        httpServer->stop();
-    if (httpThread.joinable())
-        httpThread.join();
 }
 
 void MatchmakingPlugin::LoadConfig()
@@ -301,40 +265,22 @@ void MatchmakingPlugin::PollSupabase()
             if (!arr.is_array() || arr.empty())
                 return;
             auto instr = arr.at(0);
-            std::string action = instr.value("action", "");
-
-            if (action == "join_match")
-            {
-                std::string server = instr.value("server_name", "");
-                std::string password = instr.value("password", "");
-                gameWrapper->Execute([this, server, password](GameWrapper* gw) {
-                    auto mm = gw->GetMatchmakingWrapper();
-                    if (mm)
-                        mm.JoinPrivateMatch(server, password);
-                    gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie rejointe automatiquement", "default", 3.0f);
-                });
-            }
-            else if (action == "create_match")
-            {
-                std::string name = instr.value("server_name", "");
-                std::string password = instr.value("password", "");
-                gameWrapper->Execute([this, name, password](GameWrapper* gw) {
-                    auto mm = gw->GetMatchmakingWrapper();
-                    if (mm)
-                    {
-                        CustomMatchSettings settings{};
-                        settings.ServerName = name;
-                        settings.Password = password;
-                        settings.MapName = "Stadium_P";
-                        mm.CreatePrivateMatch(Region::EU, static_cast<int>(PlaylistIds::PrivateMatch), settings);
-                        gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie créée automatiquement", "default", 3.0f);
-                    }
-                });
-            }
-            else
-            {
+            std::string name = instr.value("rl_name", "");
+            std::string password = instr.value("rl_password", "");
+            if (name.empty())
                 return;
-            }
+            gameWrapper->Execute([this, name, password](GameWrapper* gw) {
+                auto mm = gw->GetMatchmakingWrapper();
+                if (mm)
+                {
+                    CustomMatchSettings settings{};
+                    settings.ServerName = name;
+                    settings.Password = password;
+                    settings.MapName = "Stadium_P";
+                    mm.CreatePrivateMatch(Region::EU, static_cast<int>(PlaylistIds::PrivateMatch), settings);
+                    gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie créée automatiquement", "default", 3.0f);
+                }
+            });
 
             cpr::Delete(cpr::Url{supabaseUrl}, cpr::Parameters{{"player_id", "eq." + playerId}}, headers);
         }

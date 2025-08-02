@@ -16,7 +16,7 @@ Il doit contenir les champs suivants :
 
 ```json
 {
-  "SUPABASE_URL": "https://TON_PROJECT.supabase.co/rest/v1/match_instructions",
+  "SUPABASE_URL": "https://TON_PROJECT.supabase.co/rest/v1/match_sessions",
   "SUPABASE_API_KEY": "TON_API_KEY",
   "SUPABASE_JWT": "TON_JWT"
 }
@@ -32,9 +32,9 @@ affiché dans la console BakkesMod avec le nom du joueur et le temps de jeu.
 
 ## Fonctionnement
 
-Le plugin récupère d'abord les instructions de match depuis Supabase, puis envoie les
-informations de fin de match au bot Discord via une requête HTTP POST vers
-`http://34.32.118.126:3000`.
+Le plugin récupère les sessions de match depuis la table `match_sessions` de Supabase
+(`player_id`, `rl_name`, `rl_password`), puis envoie les informations de fin de match au bot
+Discord via une requête HTTP POST vers `http://34.32.118.126:3000`.
 Il transmet notamment :
 
 - le score global des équipes ;
