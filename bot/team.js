@@ -27,7 +27,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CHANNEL_FILE = path.join(__dirname, 'channel.json');
 
 async function sbRequest(method, table, { query = '', body } = {}) {
-  const url = `${BASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`;
+  let path = table;
+  const idx = table.indexOf('?');
+  if (idx !== -1) {
+    const existing = table.slice(idx + 1);
+    path = table.slice(0, idx);
+    query = query ? `${existing}&${query}` : existing;
+  }
+  if ((method === 'POST' || method === 'PATCH') && !/select=/i.test(query)) {
+    query = query ? `${query}&select=*` : 'select=*';
+  }
+  const url = `${BASE_URL}/rest/v1/${path}${query ? `?${query}` : ''}`;
   const res = await fetch(url, {
     method,
     headers: {

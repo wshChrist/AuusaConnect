@@ -26,10 +26,17 @@ async function sbRequest(method, table, { query = '', body } = {}) {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     throw new Error('SUPABASE_URL et SUPABASE_KEY doivent être définies');
   }
-  if (method === 'POST' && !query) {
-    query = 'select=*';
+  let path = table;
+  const idx = table.indexOf('?');
+  if (idx !== -1) {
+    const existing = table.slice(idx + 1);
+    path = table.slice(0, idx);
+    query = query ? `${existing}&${query}` : existing;
   }
-  const url = `${BASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`;
+  if ((method === 'POST' || method === 'PATCH') && !/select=/i.test(query)) {
+    query = query ? `${query}&select=*` : 'select=*';
+  }
+  const url = `${BASE_URL}/rest/v1/${path}${query ? `?${query}` : ''}`;
   let res;
   try {
     res = await fetch(url, {
