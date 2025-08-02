@@ -108,6 +108,8 @@ private:
     std::string supabaseUrl;
     std::string supabaseApiKey;
     std::string supabaseJwt;
+    std::string lastSupabaseName;
+    std::string lastSupabasePassword;
 };
 
 static PriWrapper GetPriByName(ServerWrapper server, const std::string& name)
@@ -202,6 +204,21 @@ void MatchmakingPlugin::onLoad()
         debugEnabled = cvar.getBoolValue();
     });
     cvarManager->registerCvar("mm_player_id", "unknown", "Identifiant Supabase du joueur");
+    cvarManager->registerNotifier(
+        "mm_show_credentials",
+        [this](std::vector<std::string>) {
+            if (lastSupabaseName.empty())
+                Log("Aucun credential Supabase en memoire");
+            else
+                Log("rl_name=" + lastSupabaseName + ", rl_password=" + lastSupabasePassword);
+        },
+        "Affiche les dernieres informations recuperees depuis Supabase",
+        PERMISSION_ALL);
+    cvarManager->registerNotifier(
+        "mm_poll_now",
+        [this](std::vector<std::string>) { PollSupabase(); },
+        "Force une verification immediate de Supabase",
+        PERMISSION_ALL);
     debugEnabled = cvarManager->getCvar("mm_debug").getBoolValue();
     std::filesystem::path logPath = gameWrapper->GetDataFolder() / "matchmaking.log";
     logFile.open(logPath.string(), std::ios::app);
@@ -269,6 +286,9 @@ void MatchmakingPlugin::PollSupabase()
             std::string password = instr.value("rl_password", "");
             if (name.empty())
                 return;
+            lastSupabaseName = name;
+            lastSupabasePassword = password;
+            Log("[Supabase] rl_name=" + name + ", rl_password=" + password);
             gameWrapper->Execute([this, name, password](GameWrapper* gw) {
                 auto mm = gw->GetMatchmakingWrapper();
                 if (mm)
