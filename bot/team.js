@@ -57,7 +57,13 @@ async function findTeamByUser(userId) {
 async function createTeamResources(interaction, name) {
   const guild = interaction.guild;
   if (!guild) return null;
-  const role = await guild.roles.create({ name }).catch(() => null);
+  const role = await guild.roles.create({ name }).catch(async err => {
+    console.error(err);
+    try {
+      await interaction.editReply({ content: `Erreur lors de la création du rôle pour l'équipe ${name}.` });
+    } catch {}
+    return null;
+  });
   if (role) {
     await interaction.member.roles.add(role).catch(() => {});
   }
@@ -77,24 +83,46 @@ async function createTeamResources(interaction, name) {
         ]
       : [])
   ];
-  const category = await guild.channels.create({
-    name,
-    type: ChannelType.GuildCategory,
-    permissionOverwrites: perms
-  }).catch(() => null);
+  const category = await guild.channels
+    .create({
+      name,
+      type: ChannelType.GuildCategory,
+      permissionOverwrites: perms
+    })
+    .catch(async err => {
+      console.error(err);
+      try {
+        await interaction.editReply({ content: `Erreur lors de la création de la catégorie pour l'équipe ${name}.` });
+      } catch {}
+      return null;
+    });
   if (category) {
-    await guild.channels.create({
-      name: 'discussion',
-      type: ChannelType.GuildText,
-      parent: category,
-      permissionOverwrites: perms
-    }).catch(() => null);
-    await guild.channels.create({
-      name: 'vocal',
-      type: ChannelType.GuildVoice,
-      parent: category,
-      permissionOverwrites: perms
-    }).catch(() => null);
+    await guild.channels
+      .create({
+        name: 'discussion',
+        type: ChannelType.GuildText,
+        parent: category,
+        permissionOverwrites: perms
+      })
+      .catch(async err => {
+        console.error(err);
+        try {
+          await interaction.editReply({ content: `Erreur lors de la création du salon discussion pour l'équipe ${name}.` });
+        } catch {}
+      });
+    await guild.channels
+      .create({
+        name: 'vocal',
+        type: ChannelType.GuildVoice,
+        parent: category,
+        permissionOverwrites: perms
+      })
+      .catch(async err => {
+        console.error(err);
+        try {
+          await interaction.editReply({ content: `Erreur lors de la création du salon vocal pour l'équipe ${name}.` });
+        } catch {}
+      });
   }
   return role;
 }
@@ -261,15 +289,19 @@ async function handleBroadcast(interaction) {
         ch => ch.type === ChannelType.GuildText && ch.parentId === category.id
       );
     }
-    if (!channel) {
-      await interaction.followUp({ content: `Salon introuvable pour ${t.name}`, ephemeral: true });
-      console.warn(`Salon introuvable pour ${t.name}`);
-      continue;
-    }
-    const msg = await channel.send({ embeds: [embed] }).catch(() => null);
-    if (msg && mode === 'binaire') {
-      await msg.react('✅').catch(() => {});
-      await msg.react('❌').catch(() => {});
+    if (channel) {
+      try {
+        const msg = await channel.send({ embeds: [embed] });
+        if (mode === 'binaire') {
+          await msg.react('✅');
+          await msg.react('❌');
+        }
+        sentTo.push(t.name);
+      } catch (err) {
+        console.error(err);
+        await interaction.editReply({ content: `Échec lors de l'envoi pour l'équipe ${t.name}.` });
+        return;
+      }
     }
     if (msg) sentTo.push(t.name);
   }
