@@ -1,5 +1,6 @@
 #include "bakkesmod/plugin/bakkesmodplugin.h"
 #include "bakkesmod/wrappers/WrapperStructs.h"
+#include "bakkesmod/wrappers/MatchmakingWrapper.h"
 #include <cpr/cpr.h>
 #include <nlohmann/json.hpp>
 #include <vector>
@@ -11,6 +12,8 @@
 #include <algorithm>
 #include <utility>
 #include <thread>
+#include <memory>
+#include "httplib.h"
 
 using json = nlohmann::json;
 
@@ -100,6 +103,8 @@ private:
     bool debugEnabled = false;
     std::ofstream logFile;
     void Log(const std::string& msg);
+    std::unique_ptr<httplib::Server> httpServer;
+    std::thread httpThread;
 };
 
 static PriWrapper GetPriByName(ServerWrapper server, const std::string& name)
@@ -198,6 +203,31 @@ void MatchmakingPlugin::onLoad()
     logFile.open(logPath.string(), std::ios::app);
     Log("Plugin loaded");
     HookEvents();
+
+    httpServer = std::make_unique<httplib::Server>();
+    httpServer->Post("/start", [this](const httplib::Request& req, httplib::Response& res) {
+        try {
+            auto data = json::parse(req.body);
+            std::string name = data.value("name", "");
+            std::string password = data.value("password", "");
+            auto mm = gameWrapper->GetMatchmakingWrapper();
+            if (mm) {
+                mm.CreatePrivateMatch(name, password);
+                res.status = 200;
+                res.set_content("ok", "text/plain");
+            } else {
+                res.status = 500;
+                res.set_content("no wrapper", "text/plain");
+            }
+        } catch (...) {
+            res.status = 400;
+            res.set_content("bad request", "text/plain");
+        }
+    });
+
+    httpThread = std::thread([this]() {
+        httpServer->listen("0.0.0.0", 6969);
+    });
 }
 
 void MatchmakingPlugin::onUnload()
@@ -205,6 +235,10 @@ void MatchmakingPlugin::onUnload()
     Log("Plugin unloaded");
     if (logFile.is_open())
         logFile.close();
+    if (httpServer)
+        httpServer->stop();
+    if (httpThread.joinable())
+        httpThread.join();
 }
 
 void MatchmakingPlugin::HookEvents()
