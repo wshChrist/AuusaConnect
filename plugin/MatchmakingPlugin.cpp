@@ -469,6 +469,7 @@ void MatchmakingPlugin::OnGameEnd()
             {"cuts", ps.cuts},
             {"clearances", ps.clearances},
             {"defensiveChallenges", ps.challengesWon},
+            {"offensiveDemos", ps.offensiveDemos},
             {"defensiveDemos", ps.defensiveDemos},
             {"defenseTime", ps.defenseTime},
             {"clutchSaves", ps.clutchSaves},
@@ -476,6 +477,8 @@ void MatchmakingPlugin::OnGameEnd()
             {"ballTouches", ps.ballTouches},
             {"highPressings", ps.highPressings},
             {"aerialTouches", ps.aerialTouches},
+            {"usefulPasses", ps.usefulPasses},
+            {"cleanClears", ps.cleanClears},
             {"missedOpenGoals", ps.missedOpenGoals},
             {"doubleCommits", ps.doubleCommits},
             {"xg", xgTotal}
