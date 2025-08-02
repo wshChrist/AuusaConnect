@@ -9,31 +9,20 @@ Ce dossier contient un squelette de plugin Bakkesmod.
 3. Ajouter la dépendance à la bibliothèque [cpr](https://github.com/libcpr/cpr) pour effectuer des requêtes HTTP.
 4. Compiler en Release et placer le `.dll` généré dans le dossier `bakkesmod/plugins`.
 
-## Connexion à Supabase
+## Configuration
 
-Le plugin interroge régulièrement une instance Supabase afin de récupérer les
-instructions de match (par exemple `join_match`). Pour que cette communication
-fonctionne, il faut renseigner :
+Créer un fichier `config.json` placé dans le dossier de données du plugin (un exemple est fourni dans ce dépôt).
+Il doit contenir les champs suivants :
 
-- `SUPABASE_URL` : URL de l'endpoint REST (`https://votre-projet.supabase.co/rest/v1/match_instructions`).
-- `SUPABASE_API_KEY` : clé API du projet.
-- `SUPABASE_JWT` : JWT utilisé pour authentifier les requêtes.
-
-Exemple de configuration rapide :
-
-```ini
-SUPABASE_URL=https://xyzcompany.supabase.co/rest/v1/match_instructions
-SUPABASE_API_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-SUPABASE_JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```json
+{
+  "SUPABASE_URL": "https://TON_PROJECT.supabase.co/rest/v1/match_instructions",
+  "SUPABASE_API_KEY": "TON_API_KEY",
+  "SUPABASE_JWT": "TON_JWT"
+}
 ```
 
-Pour tester la connexion :
-
-```bash
-curl -H "apikey: $SUPABASE_API_KEY" \
-     -H "Authorization: Bearer $SUPABASE_JWT" \
-     "$SUPABASE_URL?player_id=eq.test"
-```
+Lors du chargement, le plugin lit ce fichier et utilise les valeurs pour contacter Supabase.
 
 ## Debug
 
