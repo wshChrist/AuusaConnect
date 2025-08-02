@@ -250,10 +250,17 @@ async function handleBroadcast(interaction) {
 
   const sentTo = [];
   for (const t of teams) {
-    const slug = t.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const channel = guild.channels.cache.find(
-      c => c.type === ChannelType.GuildText && c.name.includes(slug)
+    const category = guild.channels.cache.find(
+      c =>
+        c.type === ChannelType.GuildCategory &&
+        c.name.toLowerCase() === t.name.toLowerCase()
     );
+    let channel;
+    if (category) {
+      channel = guild.channels.cache.find(
+        ch => ch.type === ChannelType.GuildText && ch.parentId === category.id
+      );
+    }
     if (channel) {
       const msg = await channel.send({ embeds: [embed] }).catch(() => null);
       if (msg && mode === 'binaire') {
