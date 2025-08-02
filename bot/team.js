@@ -219,11 +219,20 @@ async function handleBroadcast(interaction) {
     await interaction.reply({ content: 'Permissions insuffisantes.', ephemeral: true });
     return;
   }
+
   const target = interaction.options.getString('target');
-  const content = interaction.options.getString('message');
-  const title = interaction.options.getString('titre') || '📢 Annonce officielle';
+  const mode = interaction.options.getString('mode') || 'standard';
+  const embedJson = interaction.options.getString('embed_json');
 
   await interaction.reply({ content: 'Envoi en cours...', ephemeral: true });
+
+  let embedData;
+  try {
+    embedData = JSON.parse(embedJson);
+  } catch (err) {
+    await interaction.editReply({ content: 'Embed JSON invalide.' });
+    return;
+  }
 
   let teams = [];
   if (target.toLowerCase() === 'all') {
@@ -237,13 +246,7 @@ async function handleBroadcast(interaction) {
     teams = [rows[0]];
   }
 
-  const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setDescription(`> ${content}`)
-    .addFields({ name: 'Envoyé par', value: `<@${interaction.user.id}>` })
-    .setColor('#f9a602')
-    .setFooter({ text: 'Annonce officielle — réservée à votre équipe' })
-    .setTimestamp();
+  const embed = EmbedBuilder.from(embedData);
 
   const sentTo = [];
   for (const t of teams) {
@@ -252,8 +255,12 @@ async function handleBroadcast(interaction) {
       c => c.type === ChannelType.GuildText && c.name.includes(slug)
     );
     if (channel) {
-      await channel.send({ embeds: [embed] }).catch(() => {});
-      sentTo.push(t.name);
+      const msg = await channel.send({ embeds: [embed] }).catch(() => null);
+      if (msg && mode === 'binaire') {
+        await msg.react('✅').catch(() => {});
+        await msg.react('❌').catch(() => {});
+      }
+      if (msg) sentTo.push(t.name);
     }
   }
 
@@ -261,10 +268,11 @@ async function handleBroadcast(interaction) {
   if (logChannel) {
     const logEmbed = new EmbedBuilder()
       .setTitle('Nouveau broadcast')
-      .setDescription(
-        `Message envoyé par <@${interaction.user.id}> à ${sentTo.join(', ') || 'aucune équipe'}.`
+      .addFields(
+        { name: 'Auteur', value: `<@${interaction.user.id}>`, inline: true },
+        { name: 'Cible', value: sentTo.join(', ') || target, inline: true },
+        { name: 'Mode', value: mode, inline: true }
       )
-      .addFields({ name: 'Contenu', value: content })
       .setColor('#f9a602')
       .setTimestamp();
     await logChannel.send({ embeds: [logEmbed] });
@@ -293,16 +301,20 @@ export function setupTeam(client) {
                 required: true
               },
               {
-                name: 'message',
-                description: 'Contenu de l\'annonce',
+                name: 'mode',
+                description: 'standard ou binaire',
                 type: ApplicationCommandOptionType.String,
-                required: true
+                required: true,
+                choices: [
+                  { name: 'standard', value: 'standard' },
+                  { name: 'binaire', value: 'binaire' }
+                ]
               },
               {
-                name: 'titre',
-                description: 'Titre personnalisé',
+                name: 'embed_json',
+                description: 'Embed Discord au format JSON',
                 type: ApplicationCommandOptionType.String,
-                required: false
+                required: true
               }
             ]
           }
