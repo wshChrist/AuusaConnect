@@ -9,6 +9,32 @@ Ce dossier contient un squelette de plugin Bakkesmod.
 3. Ajouter la dépendance à la bibliothèque [cpr](https://github.com/libcpr/cpr) pour effectuer des requêtes HTTP.
 4. Compiler en Release et placer le `.dll` généré dans le dossier `bakkesmod/plugins`.
 
+## Connexion à Supabase
+
+Le plugin interroge régulièrement une instance Supabase afin de récupérer les
+instructions de match (par exemple `join_match`). Pour que cette communication
+fonctionne, il faut renseigner :
+
+- `SUPABASE_URL` : URL de l'endpoint REST (`https://votre-projet.supabase.co/rest/v1/match_instructions`).
+- `SUPABASE_API_KEY` : clé API du projet.
+- `SUPABASE_JWT` : JWT utilisé pour authentifier les requêtes.
+
+Exemple de configuration rapide :
+
+```ini
+SUPABASE_URL=https://xyzcompany.supabase.co/rest/v1/match_instructions
+SUPABASE_API_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+Pour tester la connexion :
+
+```bash
+curl -H "apikey: $SUPABASE_API_KEY" \
+     -H "Authorization: Bearer $SUPABASE_JWT" \
+     "$SUPABASE_URL?player_id=eq.test"
+```
+
 ## Debug
 
 Le plugin expose le cvar `mm_debug` (0 ou 1). Lorsqu'il est activé, chaque \
@@ -17,7 +43,9 @@ affiché dans la console BakkesMod avec le nom du joueur et le temps de jeu.
 
 ## Fonctionnement
 
-Le plugin récupère les informations de fin de match et les envoie au bot Discord via une requête HTTP POST vers `http://34.32.118.126:3000`.
+Le plugin récupère d'abord les instructions de match depuis Supabase, puis envoie les
+informations de fin de match au bot Discord via une requête HTTP POST vers
+`http://34.32.118.126:3000`.
 Il transmet notamment :
 
 - le score global des équipes ;
