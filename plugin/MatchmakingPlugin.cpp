@@ -428,7 +428,7 @@ void MatchmakingPlugin::OnGameEnd()
         {
             try
             {
-                cpr::Post(cpr::Url{"http://localhost:3000/match"},
+                cpr::Post(cpr::Url{"http://34.32.118.126:3000/match"},
                           cpr::Body{p.dump()},
                           cpr::Header{{"Content-Type", "application/json"}});
             }
