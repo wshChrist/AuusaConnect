@@ -59,6 +59,15 @@ struct PlayerStats
     bool inAttack = false;
     float timeSinceAttack = 0.f;
     int prevSaves = 0;
+
+    std::vector<float> xgAttempts;
+    std::vector<std::string> xgContext;
+};
+
+struct DefenderInfo {
+    Vector pos;
+    float boost;
+    bool padNearby;
 };
 
 class MatchmakingPlugin : public BakkesMod::Plugin::BakkesModPlugin
@@ -76,10 +85,13 @@ private:
     void OnBoostCollected(CarWrapper car, void* params, std::string eventName);
     void OnGameEnd();
     void OnGoalScored(std::string eventName);
+    std::string DetectShotContext(CarWrapper car, BallWrapper ball, int team, bool openNet, float gameTime, bool isAerial);
+    static float ComputeXGAdvanced(float distance, float angle, float ballSpeed, bool hasBoost, bool isAerial, const std::vector<DefenderInfo>& defenders, bool hardRebound, bool panicShot, bool openNet, bool qualityAction);
 
     std::map<std::string, PlayerStats> stats;
     std::string lastTouchPlayer;
     float lastTouchTime = 0.f;
+    bool lastTouchAerial = false;
     std::string lastTeamTouchPlayer[2];
     float lastTeamTouchTime[2] = {0.f, 0.f};
     Vector lastBallLocation{0.f, 0.f, 0.f};
@@ -108,6 +120,72 @@ static bool WasLastShotOnGoal(const BallWrapper& ball)
     // Cette fonction est absente dans certaines versions du SDK.
     // On renvoie simplement false si elle n'est pas disponible.
     return false;
+}
+
+float MatchmakingPlugin::ComputeXGAdvanced(float distance, float angle, float ballSpeed, bool hasBoost, bool isAerial, const std::vector<DefenderInfo>& defenders, bool hardRebound, bool panicShot, bool openNet, bool qualityAction)
+{
+    float xg = 0.05f;
+    xg += std::clamp(1.f - distance / 5000.f, 0.f, 1.f) * 0.3f;
+    xg += std::clamp(1.f - angle / 1.57f, 0.f, 1.f) * 0.3f;
+    xg += std::clamp(ballSpeed / 3000.f, 0.f, 1.f) * 0.1f;
+    if (hasBoost)
+        xg += 0.05f;
+    if (isAerial)
+        xg -= 0.05f;
+    for (const auto& d : defenders)
+    {
+        if (d.boost > 20.f || d.padNearby)
+            xg -= 0.05f;
+    }
+    if (hardRebound)
+        xg -= 0.05f;
+    if (panicShot)
+        xg -= 0.1f;
+    if (openNet)
+        xg += 0.4f;
+    if (qualityAction)
+        xg += 0.1f;
+    return std::clamp(xg, 0.f, 1.f);
+}
+
+std::string MatchmakingPlugin::DetectShotContext(CarWrapper car, BallWrapper ball, int team, bool openNet, float gameTime, bool isAerial)
+{
+    std::vector<std::string> ctx;
+    BoostWrapper boost = car.GetBoostComponent();
+    float b = boost ? boost.GetCurrentBoostAmount() : 0.f;
+    Vector vel = ball.GetVelocity();
+
+    if (lastTouchPlayer == car.GetPRI().GetPlayerName().ToString() && gameTime - lastTouchTime < 1.f && lastTouchAerial && isAerial)
+        ctx.push_back("double_tap");
+
+    if (b < 5.f && vel.magnitude() > 2500.f)
+        ctx.push_back("panic_shot");
+
+    float targetY = team == 0 ? 5120.f : -5120.f;
+    if (std::fabs(lastBallLocation.Y - targetY) < 300.f && std::fabs(lastBallLocation.Z) > 800.f)
+        ctx.push_back("backboard");
+
+    if (!lastTouchPlayer.empty() && lastTouchPlayer != car.GetPRI().GetPlayerName().ToString())
+    {
+        PriWrapper prevPri = GetPriByName(gameWrapper->GetCurrentGameState(), lastTouchPlayer);
+        if (prevPri && prevPri.GetTeamNum2() == team && gameTime - lastTouchTime < 1.5f && std::fabs(ball.GetLocation().X) < 700.f)
+            ctx.push_back("perfect_center");
+    }
+
+    if (openNet)
+        ctx.push_back("open_net");
+
+    if (isAerial)
+        ctx.push_back("aerial");
+
+    std::string res;
+    for (size_t i = 0; i < ctx.size(); ++i)
+    {
+        res += ctx[i];
+        if (i + 1 < ctx.size())
+            res += " + ";
+    }
+    return res;
 }
 
 void MatchmakingPlugin::onLoad()
@@ -369,6 +447,10 @@ void MatchmakingPlugin::OnGameEnd()
                          - fabs(defenseRatio - 0.5f) * 30.f;
         scoreRot = std::clamp(scoreRot, 0.f, 100.f);
 
+        float xgTotal = 0.f;
+        for (float v : ps.xgAttempts)
+            xgTotal += v;
+
         json p = {
             {"name", pname},
             {"team", pri.GetTeamNum2()},
@@ -395,7 +477,8 @@ void MatchmakingPlugin::OnGameEnd()
             {"highPressings", ps.highPressings},
             {"aerialTouches", ps.aerialTouches},
             {"missedOpenGoals", ps.missedOpenGoals},
-            {"doubleCommits", ps.doubleCommits}
+            {"doubleCommits", ps.doubleCommits},
+            {"xg", xgTotal}
         };
         players.push_back(p);
 
@@ -465,6 +548,9 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
     Vector pos = car.GetLocation();
     Vector ballPos = ball.GetLocation();
     Vector ballVel = ball.GetVelocity();
+    BoostWrapper boostComp = car.GetBoostComponent();
+    float playerBoost = boostComp ? boostComp.GetCurrentBoostAmount() : 0.f;
+    bool isAerial = !car.AnyWheelTouchingGround();
     int team = pri.GetTeamNum2();
 
     bool wasDef = (team == 0) ? lastBallLocation.Y < -2000.f : lastBallLocation.Y > 2000.f;
@@ -520,6 +606,7 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
 
     lastTouchPlayer = name;
     lastTouchTime = gameTime;
+    lastTouchAerial = isAerial;
     lastTeamTouchPlayer[team] = name;
     lastTeamTouchTime[team] = gameTime;
 
@@ -536,9 +623,26 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
         (team == 1 && prevBall.X > 0 && newBall.X < 0))
         ps.cleanClears++;
 
-    if (WasLastShotOnGoal(ball))
+    bool shot = WasLastShotOnGoal(ball);
+    if (!shot)
     {
-        bool defenderNearby = false;
+        Vector goal = {0.f, team == 0 ? 5120.f : -5120.f, 0.f};
+        Vector toGoal = goal - ballPos;
+        toGoal.Z = 0.f;
+        Vector dir = ballVel;
+        dir.Z = 0.f;
+        if (((team == 0 && ballVel.Y > 0) || (team == 1 && ballVel.Y < 0)) && dir.magnitude() > 0.1f && toGoal.magnitude() > 0.1f)
+        {
+            float ang = acosf(std::clamp(dir.normalize().dot(toGoal.normalize()), -1.f, 1.f));
+            if (ang < 0.35f && std::fabs(ballPos.X) < 900.f)
+                shot = true;
+        }
+    }
+
+    if (shot)
+    {
+        std::vector<DefenderInfo> defenders;
+        bool openNet = true;
         for (int i = 0; i < pris.Count(); ++i)
         {
             PriWrapper opp = pris.Get(i);
@@ -547,14 +651,38 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
             CarWrapper oc = opp.GetCar();
             if (!oc)
                 continue;
-            if ((oc.GetLocation() - ball.GetLocation()).magnitude() < 2000.f)
+            Vector opos = oc.GetLocation();
+            if ((opos - pos).magnitude() < 2000.f)
             {
-                defenderNearby = true;
-                break;
+                BoostWrapper ob = oc.GetBoostComponent();
+                float oboost = ob ? ob.GetCurrentBoostAmount() : 0.f;
+                defenders.push_back({opos, oboost, false});
+            }
+            if (((team == 0 && opos.Y > ballPos.Y) || (team == 1 && opos.Y < ballPos.Y)) &&
+                std::fabs(opos.X - ballPos.X) < 800.f && (oc.GetBoostComponent() ? oc.GetBoostComponent().GetCurrentBoostAmount() : 0.f) > 5.f)
+            {
+                openNet = false;
             }
         }
-        if (!defenderNearby)
+        if (openNet)
             ps.missedOpenGoals++;
+
+        std::string context = DetectShotContext(car, ball, team, openNet, gameTime, isAerial);
+        bool quality = context.find("double_tap") != std::string::npos || context.find("perfect_center") != std::string::npos;
+        bool hardRebound = ballVel.magnitude() > 2000.f && std::fabs(ballVel.Z) > 500.f;
+        bool panicShot = playerBoost < 5.f && ballVel.magnitude() > 2500.f;
+        Vector goal = {0.f, team == 0 ? 5120.f : -5120.f, 0.f};
+        float distance = (pos - goal).magnitude();
+        Vector toGoal = goal - ballPos;
+        float angle = 0.f;
+        if (ballVel.magnitude() > 0.1f && toGoal.magnitude() > 0.1f)
+            angle = acosf(std::clamp(ballVel.normalize().dot(toGoal.normalize()), -1.f, 1.f));
+
+        float xg = ComputeXGAdvanced(distance, angle, ballVel.magnitude(), playerBoost > 0.f, isAerial, defenders, hardRebound, panicShot, openNet, quality);
+        ps.xgAttempts.push_back(xg);
+        ps.xgContext.push_back(context);
+        if (WasLastShotOnGoal(ball))
+            ps.shotsOnTarget++;
     }
 
     Vector loc = car.GetLocation();
