@@ -238,25 +238,18 @@ void MatchmakingPlugin::onUnload()
 
 void MatchmakingPlugin::LoadConfig()
 {
-    std::filesystem::path configPath = gameWrapper->GetDataFolder() / "config.json";
-    std::ifstream file(configPath);
-    if (!file.is_open())
-    {
-        Log("Impossible d'ouvrir " + configPath.string());
-        return;
-    }
-    try
-    {
-        json data;
-        file >> data;
-        supabaseUrl = data.value("SUPABASE_URL", "");
-        supabaseApiKey = data.value("SUPABASE_API_KEY", "");
-        supabaseJwt = data.value("SUPABASE_JWT", "");
-    }
-    catch (...)
-    {
-        Log("Erreur lors de la lecture de config.json");
-    }
+    Log("[DEBUG] LoadConfig forcé sans lecture de fichier");
+
+    supabaseUrl = "https://srszelabkxvdrmorfovm.supabase.co/rest/v1/match_credentials";
+    supabaseApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNyc3plbGFia3h2ZHJtb3Jmb3ZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAwNDQxMDUsImV4cCI6MjA2NTYyMDEwNX0.ixXgOg6eznTi3YES_sYnYQFEBS17oGSpjd8qwxHEQ94";
+    supabaseJwt = "eyJhbGciOiJIUzI1NiIsImtpZCI6InZLSUhaT1ZseEE0SDR0NnAiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3Nyc3plbGFia3h2ZHJtb3Jmb3ZtLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI1ODdmZjJjNi1iODhkLTRiMmMtOTk0MC1iYTEwZDgzNzc0ZTciLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzU0MTczMzA4LCJpYXQiOjE3NTQxNjk3MDgsImVtYWlsIjoicGVrYTAxOTBAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJlbWFpbF92ZXJpZmllZCI6dHJ1ZX0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NTQxNjk3MDh9XSwic2Vzc2lvbl9pZCI6Ijc4YTgzZTQ5LThkOTUtNGRhZi1iMDc2LWEwZDVmYzhlZWZkMyIsImlzX2Fub255bW91cyI6ZmFsc2V9.K_TfpAHuwYKTSUsmdGzP38HiwlN1oBLmqF7WnAIvS0w";
+
+    Log("[DEBUG] Injecté manuellement :");
+    Log(" - URL: " + supabaseUrl);
+    Log(" - API Key: " + supabaseApiKey.substr(0, 10) + "...");
+    Log(" - JWT: " + supabaseJwt.substr(0, 10) + "...");
+
+    PollSupabase();
 }
 
 void MatchmakingPlugin::PollSupabase()
