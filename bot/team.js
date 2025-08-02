@@ -303,6 +303,7 @@ async function handleBroadcast(interaction) {
         return;
       }
     }
+    if (msg) sentTo.push(t.name);
   }
 
   const logChannel = guild.channels.cache.find(c => c.name.includes('logs-broadcasts'));
