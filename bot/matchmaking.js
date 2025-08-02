@@ -15,7 +15,7 @@ export function setupMatchmaking(client) {
   const banRoleName = '🚫 Banni Ranked';
   const bakkesRole = '🧩 BakkesMod';
   const consoleRole = 'Console';
-  const MATCH_CATEGORY_ID = '1400845391238398112';
+  const MATCH_CATEGORY_ID = process.env.MATCH_CATEGORY_ID;
   const bans = new Map(); // userId -> {count}
   let matchCounter = 0;
 
@@ -44,11 +44,12 @@ export function setupMatchmaking(client) {
     const guild = channel.guild;
     const modRole = guild.roles.cache.find(r => /mod/i.test(r.name));
     const banRole = guild.roles.cache.find(r => r.name === banRoleName);
+    const parent = MATCH_CATEGORY_ID && guild.channels.cache.has(MATCH_CATEGORY_ID) ? MATCH_CATEGORY_ID : undefined;
 
     const privateVocal = await guild.channels.create({
       name: `🔐 Ranked Match #${matchCounter}`,
       type: ChannelType.GuildVoice,
-      parent: MATCH_CATEGORY_ID,
+      ...(parent ? { parent } : {}),
       permissionOverwrites: [
         { id: guild.roles.everyone, deny: PermissionsBitField.Flags.Connect },
         ...players.map(p => ({ id: p.id, allow: PermissionsBitField.Flags.Connect })),
@@ -59,7 +60,7 @@ export function setupMatchmaking(client) {
     const privateText = await guild.channels.create({
       name: `ranked-match-${matchCounter}`,
       type: ChannelType.GuildText,
-      parent: MATCH_CATEGORY_ID,
+      ...(parent ? { parent } : {}),
       permissionOverwrites: [
         { id: guild.roles.everyone, deny: PermissionsBitField.Flags.ViewChannel },
         ...players.map(p => ({ id: p.id, allow: PermissionsBitField.Flags.ViewChannel })),
