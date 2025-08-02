@@ -721,7 +721,7 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
         {
             dir.normalize();
             toGoal.normalize();
-            float dotVal = dir.dot(toGoal);
+            float dotVal = Vector::dot(dir, toGoal);
             float ang = acosf(std::clamp(dotVal, -1.f, 1.f));
             if (ang < 0.35f && std::fabs(ballPos.X) < 900.f)
                 shot = true;
@@ -768,7 +768,7 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
             Vector velNorm = ballVel;
             velNorm.normalize();
             toGoal.normalize();
-            float dotVal = velNorm.dot(toGoal);
+            float dotVal = Vector::dot(velNorm, toGoal);
             angle = acosf(std::clamp(dotVal, -1.f, 1.f));
         }
 
