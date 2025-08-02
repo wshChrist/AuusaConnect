@@ -17,10 +17,6 @@
 
 using json = nlohmann::json;
 
-static const std::string SUPABASE_URL = "https://TON_PROJECT.supabase.co/rest/v1/match_instructions";
-static const std::string SUPABASE_API_KEY = "TON_API_KEY";
-static const std::string SUPABASE_JWT = "TON_JWT";
-
 struct PlayerStats
 {
     int boostPickups = 0;
@@ -96,6 +92,7 @@ private:
     static float ComputeXGAdvanced(float distance, float angle, float ballSpeed, bool hasBoost, bool isAerial, const std::vector<DefenderInfo>& defenders, bool hardRebound, bool panicShot, bool openNet, bool qualityAction);
 
     void PollSupabase();
+    void LoadConfig();
 
     std::map<std::string, PlayerStats> stats;
     std::string lastTouchPlayer;
@@ -111,6 +108,9 @@ private:
     void Log(const std::string& msg);
     std::unique_ptr<httplib::Server> httpServer;
     std::thread httpThread;
+    std::string supabaseUrl;
+    std::string supabaseApiKey;
+    std::string supabaseJwt;
 };
 
 static PriWrapper GetPriByName(ServerWrapper server, const std::string& name)
@@ -209,6 +209,7 @@ void MatchmakingPlugin::onLoad()
     std::filesystem::path logPath = gameWrapper->GetDataFolder() / "matchmaking.log";
     logFile.open(logPath.string(), std::ios::app);
     Log("Plugin loaded");
+    LoadConfig();
     HookEvents();
 
     httpServer = std::make_unique<httplib::Server>();
@@ -254,6 +255,29 @@ void MatchmakingPlugin::onUnload()
         httpThread.join();
 }
 
+void MatchmakingPlugin::LoadConfig()
+{
+    std::filesystem::path configPath = gameWrapper->GetDataFolder() / "config.json";
+    std::ifstream file(configPath);
+    if (!file.is_open())
+    {
+        Log("Impossible d'ouvrir " + configPath.string());
+        return;
+    }
+    try
+    {
+        json data;
+        file >> data;
+        supabaseUrl = data.value("SUPABASE_URL", "");
+        supabaseApiKey = data.value("SUPABASE_API_KEY", "");
+        supabaseJwt = data.value("SUPABASE_JWT", "");
+    }
+    catch (...)
+    {
+        Log("Erreur lors de la lecture de config.json");
+    }
+}
+
 void MatchmakingPlugin::PollSupabase()
 {
     gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::PollSupabase, this), 3.0f);
@@ -262,12 +286,14 @@ void MatchmakingPlugin::PollSupabase()
     std::string playerId = cvarManager->getCvar("mm_player_id").getStringValue();
     if (playerId.empty() || playerId == "unknown")
         return;
+    if (supabaseUrl.empty() || supabaseApiKey.empty() || supabaseJwt.empty())
+        return;
 
     std::thread([this, playerId]() {
         try
         {
-            auto headers = cpr::Header{{"Authorization", "Bearer " + SUPABASE_JWT}, {"apikey", SUPABASE_API_KEY}};
-            cpr::Response r = cpr::Get(cpr::Url{SUPABASE_URL}, cpr::Parameters{{"player_id", "eq." + playerId}}, headers);
+            auto headers = cpr::Header{{"Authorization", "Bearer " + supabaseJwt}, {"apikey", supabaseApiKey}};
+            cpr::Response r = cpr::Get(cpr::Url{supabaseUrl}, cpr::Parameters{{"player_id", "eq." + playerId}}, headers);
             if (r.status_code != 200)
                 return;
             auto arr = json::parse(r.text, nullptr, false);
@@ -284,7 +310,7 @@ void MatchmakingPlugin::PollSupabase()
                     mm.JoinPrivateMatch(server, password);
                 gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie rejointe automatiquement", "default", 3.0f);
             });
-            cpr::Delete(cpr::Url{SUPABASE_URL}, cpr::Parameters{{"player_id", "eq." + playerId}}, headers);
+            cpr::Delete(cpr::Url{supabaseUrl}, cpr::Parameters{{"player_id", "eq." + playerId}}, headers);
         }
         catch (...)
         {
