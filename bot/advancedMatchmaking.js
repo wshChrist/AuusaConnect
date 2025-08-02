@@ -10,6 +10,7 @@ import {
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const BAKKES_ENDPOINT = process.env.BAKKES_ENDPOINT || 'http://localhost:6969';
 // Permet d'accepter SUPABASE_URL avec ou sans le segment /rest/v1
 const BASE_URL = SUPABASE_URL?.replace(/\/rest\/v1\/?$/, '');
 // Catégorie regroupant les salons temporaires de match
@@ -287,6 +288,18 @@ export function setupAdvancedMatchmaking(client) {
         }
         await sbRequest('POST', 'temp_channels', { body: { match_id: matchId, text_channel_id: text.id, voice_channel_id: blue.id, expiry_timestamp: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() } }).catch(() => {});
         await sbRequest('POST', 'temp_channels', { body: { match_id: matchId, text_channel_id: text.id, voice_channel_id: orange.id, expiry_timestamp: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() } }).catch(() => {});
+      }
+      if (BAKKES_ENDPOINT) {
+        try {
+          await fetch(`${BAKKES_ENDPOINT}/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, password: pwd })
+          });
+          if (text) await text.send('📡 BakkesMod contacté pour lancer la partie.');
+        } catch {
+          if (text) await text.send('⚠️ Impossible de contacter le BakkesMod de l\'hôte.');
+        }
       }
       return;
     }
