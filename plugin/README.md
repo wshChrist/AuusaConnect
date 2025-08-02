@@ -9,6 +9,21 @@ Ce dossier contient un squelette de plugin Bakkesmod.
 3. Ajouter la dépendance à la bibliothèque [cpr](https://github.com/libcpr/cpr) pour effectuer des requêtes HTTP.
 4. Compiler en Release et placer le `.dll` généré dans le dossier `bakkesmod/plugins`.
 
+## Configuration
+
+Créer un fichier `config.json` placé dans le dossier de données du plugin (un exemple est fourni dans ce dépôt).
+Il doit contenir les champs suivants :
+
+```json
+{
+  "SUPABASE_URL": "https://TON_PROJECT.supabase.co/rest/v1/match_instructions",
+  "SUPABASE_API_KEY": "TON_API_KEY",
+  "SUPABASE_JWT": "TON_JWT"
+}
+```
+
+Lors du chargement, le plugin lit ce fichier et utilise les valeurs pour contacter Supabase.
+
 ## Debug
 
 Le plugin expose le cvar `mm_debug` (0 ou 1). Lorsqu'il est activé, chaque \
