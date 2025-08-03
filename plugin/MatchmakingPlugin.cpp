@@ -436,11 +436,11 @@ void MatchmakingPlugin::RefreshJwt()
 void MatchmakingPlugin::HookEvents()
 {
     gameWrapper->HookEventWithCallerPost<ServerWrapper>(
-        "Function TAGame.GameEvent_Soccar_TA.OnGameStarted",
+        "Function TAGame.GameEvent_Soccar_TA.EventGameStarted",
         std::bind(&MatchmakingPlugin::OnMatchStart, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     gameWrapper->HookEventPost(
-        "Function TAGame.GameEvent_Soccar_TA.OnGameEnded",
+        "Function TAGame.GameEvent_Soccar_TA.EventGameEnded",
         std::bind(&MatchmakingPlugin::OnGameEnd, this));
 
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
@@ -448,17 +448,17 @@ void MatchmakingPlugin::HookEvents()
         std::bind(&MatchmakingPlugin::OnHitBall, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
-        "Function TAGame.Car_TA.OnDemolished",
+        "Function TAGame.Car_TA.EventDemolished",
         std::bind(&MatchmakingPlugin::OnCarDemolish, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
-        "Function TAGame.CarComponent_Boost_TA.OnBoostCollected",
+        "Function TAGame.CarComponent_Boost_TA.EventBoostCollected",
         std::bind(&MatchmakingPlugin::OnBoostCollected, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
     gameWrapper->HookEventPost(
-        "Function TAGame.GameEvent_Soccar_TA.OnGoalScored",
+        "Function TAGame.GameEvent_Soccar_TA.EventGoalScored",
         std::bind(&MatchmakingPlugin::OnGoalScored, this, std::placeholders::_1));
     // On gère les démolitions directement dans OnCarDemolish,
     // cette écoute n'est plus nécessaire.
