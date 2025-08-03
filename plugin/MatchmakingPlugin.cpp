@@ -412,6 +412,7 @@ void MatchmakingPlugin::PollSupabase()
                     settings.ServerName = name;
                     settings.Password = password;
                     settings.MapName = "Stadium_P";
+                    settings.MaxPlayerCount = 2; // 1v1
                     mm.CreatePrivateMatch(Region::EU, static_cast<int>(PlaylistIds::PrivateMatch), settings);
                     gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie créée automatiquement", "default", 3.0f);
                 }
