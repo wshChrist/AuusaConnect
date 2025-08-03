@@ -5,7 +5,9 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ApplicationCommandOptionType
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle
 } from 'discord.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -89,31 +91,6 @@ function shuffle(arr) {
 }
 
 export function setupAdvancedMatchmaking(client) {
-  client.once('ready', async () => {
-    try {
-      await client.application.commands.create({
-        name: 'host-config',
-        description: 'Renseigner la partie Rocket League',
-        options: [
-          {
-            name: 'nom',
-            description: 'Nom de la partie',
-            type: ApplicationCommandOptionType.String,
-            required: true
-          },
-          {
-            name: 'password',
-            description: 'Mot de passe',
-            type: ApplicationCommandOptionType.String,
-            required: true
-          }
-        ]
-      });
-    } catch (err) {
-      console.error('Création commande /host-config échouée', err);
-    }
-  });
-
   client.on('voiceStateUpdate', async (oldState, newState) => {
     const channel = newState.channel;
     if (!channel) return;
@@ -178,7 +155,7 @@ export function setupAdvancedMatchmaking(client) {
       await text.send(`Capitaines : <@${players[0].id}> et <@${players[1].id}>`);
       const hostEmbed = new EmbedBuilder()
         .setTitle('🔨 Qui héberge ?')
-        .setDescription('➤ Cliquez sur “Je veux héberger”\n➤ Ensuite, utilisez `/host-config`.');
+        .setDescription('➤ Cliquez sur “Je veux héberger”\n➤ Ensuite, cliquez sur “Configurer la partie”.');
       const hostBtn = new ButtonBuilder()
         .setCustomId(`host_${session.id}`)
         .setLabel('Je veux héberger')
@@ -214,7 +191,7 @@ export function setupAdvancedMatchmaking(client) {
             await text.send(`Capitaines : <@${picks[0]}> et <@${picks[1]}>`);
           const hostEmbed = new EmbedBuilder()
             .setTitle('🔨 Qui héberge ?')
-            .setDescription('➤ Cliquez sur “Je veux héberger”\n➤ Ensuite, utilisez `/host-config`.');
+            .setDescription('➤ Cliquez sur “Je veux héberger”\n➤ Ensuite, cliquez sur “Configurer la partie”.');
           const hostBtn = new ButtonBuilder()
             .setCustomId(`host_${matchId}`)
             .setLabel('Je veux héberger')
@@ -232,7 +209,42 @@ export function setupAdvancedMatchmaking(client) {
         if (match.hostId)
           return interaction.reply({ content: 'Hôte déjà choisi.', ephemeral: true });
         match.hostId = interaction.user.id;
-        await interaction.reply({ content: 'Vous êtes l\'hôte. Utilisez `/host-config` ici.', ephemeral: true });
+        await interaction.reply({ content: 'Vous êtes l\'hôte.', ephemeral: true });
+        const configEmbed = new EmbedBuilder()
+          .setTitle('⚙️ Configurer la partie')
+          .setDescription('Cliquez sur le bouton pour entrer le nom et le mot de passe.');
+        const configBtn = new ButtonBuilder()
+          .setCustomId(`config_${matchId}`)
+          .setLabel('Configurer la partie')
+          .setStyle(ButtonStyle.Primary);
+        const text = interaction.channel;
+        if (text)
+          await text.send({ embeds: [configEmbed], components: [new ActionRowBuilder().addComponents(configBtn)] });
+        return;
+      }
+      if (interaction.customId.startsWith('config_')) {
+        const matchId = interaction.customId.slice(7);
+        const match = activeMatches.get(matchId);
+        if (!match || interaction.user.id !== match.hostId)
+          return interaction.reply({ content: 'Non autorisé.', ephemeral: true });
+        const modal = new ModalBuilder()
+          .setCustomId(`modal_${matchId}`)
+          .setTitle('Configurer la partie');
+        const nameInput = new TextInputBuilder()
+          .setCustomId('name')
+          .setLabel('Nom de la partie')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+        const pwdInput = new TextInputBuilder()
+          .setCustomId('password')
+          .setLabel('Mot de passe')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(nameInput),
+          new ActionRowBuilder().addComponents(pwdInput)
+        );
+        await interaction.showModal(modal);
         return;
       }
       if (interaction.customId.startsWith('report_')) {
@@ -245,17 +257,16 @@ export function setupAdvancedMatchmaking(client) {
       }
     }
 
-    if (interaction.isChatInputCommand() && interaction.commandName === 'host-config') {
-      const matchId = [...activeMatches.values()].find(m => m.textId === interaction.channelId)?.id;
-      if (!matchId) return interaction.reply({ content: 'Pas de match ici.', ephemeral: true });
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_')) {
+      const matchId = interaction.customId.slice(6);
       const match = activeMatches.get(matchId);
-      if (interaction.user.id !== match.hostId)
-        return interaction.reply({ content: 'Seul l\'hôte peut utiliser cette commande.', ephemeral: true });
-      const name = interaction.options.getString('nom');
-      const pwd = interaction.options.getString('password');
+      if (!match || interaction.user.id !== match.hostId)
+        return interaction.reply({ content: 'Non autorisé.', ephemeral: true });
+      const name = interaction.fields.getTextInputValue('name');
+      const pwd = interaction.fields.getTextInputValue('password');
       await sbRequest('PATCH', `match_sessions?id=eq.${matchId}`, { body: { rl_name: name, rl_password: pwd, status: 'ready' } }).catch(() => {});
       await interaction.reply({ content: 'Infos enregistrées.', ephemeral: true });
-      const text = interaction.channel;
+      const text = client.channels.cache.get(match.textId);
       if (text)
         await text.send(`🎮 Partie prête !\nNom : **${name}**\nMot de passe : **${pwd}**`);
       const guild = interaction.guild;
@@ -301,8 +312,8 @@ export function setupAdvancedMatchmaking(client) {
           const m = guild.members.cache.get(id);
           if (m?.voice.channel) await m.voice.setChannel(orange).catch(() => {});
         }
-        await sbRequest('POST', 'temp_channels', { body: { match_id: matchId, text_channel_id: text.id, voice_channel_id: blue.id, expiry_timestamp: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() } }).catch(() => {});
-        await sbRequest('POST', 'temp_channels', { body: { match_id: matchId, text_channel_id: text.id, voice_channel_id: orange.id, expiry_timestamp: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() } }).catch(() => {});
+        await sbRequest('POST', 'temp_channels', { body: { match_id: matchId, text_channel_id: match.textId, voice_channel_id: blue.id, expiry_timestamp: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() } }).catch(() => {});
+        await sbRequest('POST', 'temp_channels', { body: { match_id: matchId, text_channel_id: match.textId, voice_channel_id: orange.id, expiry_timestamp: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() } }).catch(() => {});
       }
       if (BAKKES_ENDPOINT) {
         try {
