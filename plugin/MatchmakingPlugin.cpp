@@ -640,6 +640,21 @@ void MatchmakingPlugin::OnGameEnd()
     try
     {
         Log("[OnGameEnd] Debut du traitement");
+
+        // Nettoie les cvars Rocket League afin d'eviter toute reutilisation accidentelle
+        auto clearCvar = [this](const std::string& name)
+        {
+            CVarWrapper cv = cvarManager->getCvar(name);
+            if (!cv.IsNull())
+                cv.setValue("");
+        };
+        clearCvar("rl_name");
+        clearCvar("rl_password");
+        clearCvar("queue_type");
+
+        lastSupabaseName.clear();
+        lastSupabasePassword.clear();
+
         ServerWrapper sw = gameWrapper->GetCurrentGameState();
         if (!sw)
             return;
@@ -672,7 +687,7 @@ void MatchmakingPlugin::OnGameEnd()
                 cpr::Patch(
                     cpr::Url{supabaseUrl},
                     cpr::Parameters{{"player_id", "eq." + playerId}},
-                    cpr::Body{"{\"rl_name\":null,\"rl_password\":null}"},
+                    cpr::Body{"{\"rl_name\":null,\"rl_password\":null,\"queue_type\":null}"},
                     headers);
             }
             catch (const std::exception& e)
