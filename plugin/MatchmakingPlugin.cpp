@@ -14,8 +14,52 @@
 #include <thread>
 #include <memory>
 #include <exception>
+#include <ctime>
 
 using json = nlohmann::json;
+
+static std::string Base64UrlDecode(const std::string& input)
+{
+    std::string temp = input;
+    std::replace(temp.begin(), temp.end(), '-', '+');
+    std::replace(temp.begin(), temp.end(), '_', '/');
+    while (temp.size() % 4 != 0)
+        temp += '=';
+    static const std::string chars =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    int val = 0, valb = -8;
+    for (unsigned char c : temp)
+    {
+        if (c == '=')
+            break;
+        int idx = chars.find(c);
+        if (idx == std::string::npos)
+            break;
+        val = (val << 6) + idx;
+        valb += 6;
+        if (valb >= 0)
+        {
+            out.push_back(char((val >> valb) & 0xFF));
+            valb -= 8;
+        }
+    }
+    return out;
+}
+
+static std::time_t ParseJwtExpiry(const std::string& token)
+{
+    size_t first = token.find('.') + 1;
+    size_t second = token.find('.', first);
+    if (first == std::string::npos || second == std::string::npos)
+        return 0;
+    std::string payload = token.substr(first, second - first);
+    std::string decoded = Base64UrlDecode(payload);
+    auto j = json::parse(decoded, nullptr, false);
+    if (j.is_discarded())
+        return 0;
+    return j.value("exp", 0);
+}
 
 struct PlayerStats
 {
@@ -93,6 +137,7 @@ private:
 
     void PollSupabase();
     void LoadConfig();
+    void RefreshJwt();
 
     std::map<std::string, PlayerStats> stats;
     std::string lastTouchPlayer;
@@ -109,6 +154,7 @@ private:
     std::string supabaseUrl;
     std::string supabaseApiKey;
     std::string supabaseJwt;
+    std::time_t jwtExpiry = 0;
     std::string lastSupabaseName;
     std::string lastSupabasePassword;
 };
@@ -239,16 +285,31 @@ void MatchmakingPlugin::onUnload()
 
 void MatchmakingPlugin::LoadConfig()
 {
-    Log("[DEBUG] LoadConfig forcé sans lecture de fichier");
+    std::filesystem::path path = gameWrapper->GetDataFolder() / "config.json";
+    std::ifstream file(path);
+    if (!file.is_open())
+    {
+        Log("[Config] Impossible de lire " + path.string());
+        supabaseUrl.clear();
+        supabaseApiKey.clear();
+        supabaseJwt.clear();
+        jwtExpiry = 0;
+        return;
+    }
 
-    supabaseUrl = "https://srszelabkxvdrmorfovm.supabase.co/rest/v1/match_credentials";
-    supabaseApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNyc3plbGFia3h2ZHJtb3Jmb3ZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAwNDQxMDUsImV4cCI6MjA2NTYyMDEwNX0.ixXgOg6eznTi3YES_sYnYQFEBS17oGSpjd8qwxHEQ94";
-    supabaseJwt = "eyJhbGciOiJIUzI1NiIsImtpZCI6InZLSUhaT1ZseEE0SDR0NnAiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3Nyc3plbGFia3h2ZHJtb3Jmb3ZtLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI1ODdmZjJjNi1iODhkLTRiMmMtOTk0MC1iYTEwZDgzNzc0ZTciLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzU0MTczMzA4LCJpYXQiOjE3NTQxNjk3MDgsImVtYWlsIjoicGVrYTAxOTBAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJlbWFpbF92ZXJpZmllZCI6dHJ1ZX0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NTQxNjk3MDh9XSwic2Vzc2lvbl9pZCI6Ijc4YTgzZTQ5LThkOTUtNGRhZi1iMDc2LWEwZDVmYzhlZWZkMyIsImlzX2Fub255bW91cyI6ZmFsc2V9.K_TfpAHuwYKTSUsmdGzP38HiwlN1oBLmqF7WnAIvS0w";
+    json cfg = json::parse(file, nullptr, false);
+    if (cfg.is_discarded())
+    {
+        Log("[Config] JSON invalide dans " + path.string());
+        return;
+    }
 
-    Log("[DEBUG] Injecté manuellement :");
-    Log(" - URL: " + supabaseUrl);
-    Log(" - API Key: " + supabaseApiKey.substr(0, 10) + "...");
-    Log(" - JWT: " + supabaseJwt.substr(0, 10) + "...");
+    supabaseUrl = cfg.value("SUPABASE_URL", "");
+    supabaseApiKey = cfg.value("SUPABASE_API_KEY", "");
+    supabaseJwt = cfg.value("SUPABASE_JWT", "");
+    jwtExpiry = ParseJwtExpiry(supabaseJwt);
+    if (jwtExpiry == 0)
+        Log("[Config] Date d'expiration du JWT introuvable");
 }
 
 void MatchmakingPlugin::PollSupabase()
@@ -261,6 +322,17 @@ void MatchmakingPlugin::PollSupabase()
     {
         Log("[Supabase] Requête ignorée : déjà en partie en ligne");
         return;
+    }
+
+    if (jwtExpiry != 0 && std::time(nullptr) >= jwtExpiry)
+    {
+        Log("[Supabase] JWT expiré, rafraîchissement...");
+        RefreshJwt();
+        if (jwtExpiry != 0 && std::time(nullptr) >= jwtExpiry)
+        {
+            Log("[Supabase] JWT toujours expiré après tentative de rafraîchissement");
+            return;
+        }
     }
 
     std::string playerId = cvarManager->getCvar("mm_player_id").getStringValue();
@@ -326,6 +398,15 @@ void MatchmakingPlugin::PollSupabase()
             Log("[Supabase] Exception inconnue lors de la requête");
         }
     }).detach();
+}
+
+void MatchmakingPlugin::RefreshJwt()
+{
+    LoadConfig();
+    if (jwtExpiry != 0 && std::time(nullptr) < jwtExpiry)
+        Log("[Supabase] JWT rafraîchi");
+    else
+        Log("[Supabase] Impossible de rafraîchir le JWT");
 }
 
 void MatchmakingPlugin::HookEvents()
