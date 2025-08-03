@@ -249,8 +249,6 @@ void MatchmakingPlugin::LoadConfig()
     Log(" - URL: " + supabaseUrl);
     Log(" - API Key: " + supabaseApiKey.substr(0, 10) + "...");
     Log(" - JWT: " + supabaseJwt.substr(0, 10) + "...");
-
-    PollSupabase();
 }
 
 void MatchmakingPlugin::PollSupabase()
