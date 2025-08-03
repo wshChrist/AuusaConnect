@@ -249,8 +249,6 @@ void MatchmakingPlugin::LoadConfig()
     Log(" - URL: " + supabaseUrl);
     Log(" - API Key: " + supabaseApiKey.substr(0, 10) + "...");
     Log(" - JWT: " + supabaseJwt.substr(0, 10) + "...");
-
-    PollSupabase();
 }
 
 void MatchmakingPlugin::PollSupabase()
@@ -260,7 +258,10 @@ void MatchmakingPlugin::PollSupabase()
     // `IsInGame()` renvoie également vrai en entraînement ou en freeplay,
     // ce qui empêchait toute requête lorsqu'on attendait dans ces modes.
     if (gameWrapper->IsInOnlineGame())
+    {
+        Log("[Supabase] Requête ignorée : déjà en partie en ligne");
         return;
+    }
 
     std::string playerId = cvarManager->getCvar("mm_player_id").getStringValue();
     if (playerId.empty() || playerId == "unknown")
@@ -269,7 +270,10 @@ void MatchmakingPlugin::PollSupabase()
         return;
     }
     if (supabaseUrl.empty() || supabaseApiKey.empty() || supabaseJwt.empty())
+    {
+        Log("[Supabase] Configuration Supabase incomplète");
         return;
+    }
 
     std::thread([this, playerId]() {
         try
@@ -277,15 +281,24 @@ void MatchmakingPlugin::PollSupabase()
             auto headers = cpr::Header{{"Authorization", "Bearer " + supabaseJwt}, {"apikey", supabaseApiKey}};
             cpr::Response r = cpr::Get(cpr::Url{supabaseUrl}, cpr::Parameters{{"player_id", "eq." + playerId}}, headers);
             if (r.status_code != 200)
+            {
+                Log("[Supabase] Erreur HTTP " + std::to_string(r.status_code) + ": " + r.text);
                 return;
+            }
             auto arr = json::parse(r.text, nullptr, false);
             if (!arr.is_array() || arr.empty())
+            {
+                Log("[Supabase] Réponse JSON vide ou invalide: " + r.text);
                 return;
+            }
             auto instr = arr.at(0);
             std::string name = instr.value("rl_name", "");
             std::string password = instr.value("rl_password", "");
             if (name.empty())
+            {
+                Log("[Supabase] Champ rl_name absent, aucune création de partie");
                 return;
+            }
             lastSupabaseName = name;
             lastSupabasePassword = password;
             Log("[Supabase] rl_name=" + name + ", rl_password=" + password);
@@ -304,9 +317,13 @@ void MatchmakingPlugin::PollSupabase()
 
             cpr::Delete(cpr::Url{supabaseUrl}, cpr::Parameters{{"player_id", "eq." + playerId}}, headers);
         }
+        catch (const std::exception& e)
+        {
+            Log(std::string("[Supabase] Exception: ") + e.what());
+        }
         catch (...)
         {
-            // Ignore errors
+            Log("[Supabase] Exception inconnue lors de la requête");
         }
     }).detach();
 }
