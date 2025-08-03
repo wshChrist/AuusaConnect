@@ -24,6 +24,13 @@ Il doit contenir les champs suivants :
 
 Lors du chargement, le plugin lit ce fichier et utilise les valeurs pour contacter Supabase.
 
+Le cvar `mm_player_id` doit également être configuré avec l'identifiant du joueur. Cela peut se faire via la console BakkesMod :
+
+```
+mm_player_id VOTRE_ID_SUPABASE
+```
+
+
 ## Debug
 
 Le plugin expose le cvar `mm_debug` (0 ou 1). Lorsqu'il est activé, chaque \

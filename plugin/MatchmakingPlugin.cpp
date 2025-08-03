@@ -264,7 +264,10 @@ void MatchmakingPlugin::PollSupabase()
 
     std::string playerId = cvarManager->getCvar("mm_player_id").getStringValue();
     if (playerId.empty() || playerId == "unknown")
+    {
+        Log("mm_player_id manquant ou \"unknown\". Configurez-le via la commande mm_player_id <votre_id>");
         return;
+    }
     if (supabaseUrl.empty() || supabaseApiKey.empty() || supabaseJwt.empty())
         return;
 
