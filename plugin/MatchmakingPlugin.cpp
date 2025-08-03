@@ -436,7 +436,7 @@ void MatchmakingPlugin::RefreshJwt()
 void MatchmakingPlugin::HookEvents()
 {
     gameWrapper->HookEventWithCallerPost<ServerWrapper>(
-        "Function TAGame.GameEvent_Soccar_TA.EventGameStarted",
+        "Function TAGame.GameEvent_Soccar_TA.EventMatchStarted",
         std::bind(&MatchmakingPlugin::OnMatchStart, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     gameWrapper->HookEventPost(
@@ -453,7 +453,7 @@ void MatchmakingPlugin::HookEvents()
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
-        "Function TAGame.CarComponent_Boost_TA.EventBoostCollected",
+        "Function TAGame.CarComponent_Boost_TA.EventBoostPickup",
         std::bind(&MatchmakingPlugin::OnBoostCollected, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
