@@ -328,6 +328,7 @@ void MatchmakingPlugin::LoadConfig()
     if (jwtExpiry == 0)
         Log("[Config] Date d'expiration du JWT introuvable");
     botEndpoint = cfg.value("BOT_ENDPOINT", "http://localhost:3000/match");
+    Log("[Config] BOT_ENDPOINT=" + botEndpoint);
 }
 
 void MatchmakingPlugin::PollSupabase()
