@@ -158,6 +158,7 @@ private:
     std::string lastSupabaseName;
     std::string lastSupabasePassword;
     bool supabaseDisabled = false;
+    std::string botEndpoint = "http://localhost:3000/match";
 };
 
 static PriWrapper GetPriByName(ServerWrapper server, const std::string& name)
@@ -326,6 +327,7 @@ void MatchmakingPlugin::LoadConfig()
     jwtExpiry = ParseJwtExpiry(supabaseJwt);
     if (jwtExpiry == 0)
         Log("[Config] Date d'expiration du JWT introuvable");
+    botEndpoint = cfg.value("BOT_ENDPOINT", "http://localhost:3000/match");
 }
 
 void MatchmakingPlugin::PollSupabase()
@@ -731,13 +733,13 @@ void MatchmakingPlugin::OnGameEnd()
     if (debugEnabled)
         Log("[DEBUG] Envoi des stats : " + std::to_string(players.size()) + " joueurs");
 
-    gameWrapper->SetTimeout([payload = std::move(payload)](GameWrapper* /*gw*/) mutable
+    gameWrapper->SetTimeout([payload = std::move(payload), url = botEndpoint](GameWrapper* /*gw*/) mutable
     {
-        std::thread([p = std::move(payload)]() mutable
+        std::thread([p = std::move(payload), url]() mutable
         {
             try
             {
-                cpr::Post(cpr::Url{"http://34.32.118.126:3000/match"},
+                cpr::Post(cpr::Url{url},
                           cpr::Body{p.dump()},
                           cpr::Header{{"Content-Type", "application/json"}});
             }

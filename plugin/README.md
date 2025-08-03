@@ -18,11 +18,13 @@ Il doit contenir les champs suivants :
 {
   "SUPABASE_URL": "https://TON_PROJECT.supabase.co/rest/v1/match_sessions",
   "SUPABASE_API_KEY": "TON_API_KEY",
-  "SUPABASE_JWT": "TON_JWT"
+  "SUPABASE_JWT": "TON_JWT",
+  "BOT_ENDPOINT": "http://localhost:3000/match"
 }
 ```
 
-Lors du chargement, le plugin lit ce fichier et utilise les valeurs pour contacter Supabase.
+Lors du chargement, le plugin lit ce fichier et utilise les valeurs pour contacter Supabase
+et déterminer l'URL d'envoi des résultats au bot Discord.
 
 Le cvar `mm_player_id` doit également être configuré avec l'identifiant du joueur. Cela peut se faire via la console BakkesMod :
 
@@ -41,7 +43,8 @@ affiché dans la console BakkesMod avec le nom du joueur et le temps de jeu.
 
 Le plugin récupère les sessions de match depuis la table `match_sessions` de Supabase
 (`player_id`, `rl_name`, `rl_password`), puis envoie les informations de fin de match au bot
-Discord via une requête HTTP POST vers `http://34.32.118.126:3000`.
+Discord via une requête HTTP POST vers l'URL définie par `BOT_ENDPOINT`
+(par défaut `http://localhost:3000/match`).
 Il transmet notamment :
 
 - le score global des équipes ;
