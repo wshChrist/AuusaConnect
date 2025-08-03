@@ -739,13 +739,24 @@ void MatchmakingPlugin::OnGameEnd()
         {
             try
             {
-                cpr::Post(cpr::Url{url},
-                          cpr::Body{p.dump()},
-                          cpr::Header{{"Content-Type", "application/json"}});
+                auto res = cpr::Post(cpr::Url{url},
+                                     cpr::Body{p.dump()},
+                                     cpr::Header{{"Content-Type", "application/json"}});
+
+                if (res.error.code != cpr::ErrorCode::OK)
+                    Log(std::string("[Stats] Erreur reseau : ") + res.error.message);
+                else if (res.status_code >= 200 && res.status_code < 300)
+                    Log("[Stats] Envoi reussi");
+                else
+                    Log("[Stats] Erreur HTTP " + std::to_string(res.status_code) + ": " + res.text);
+            }
+            catch (const std::exception& e)
+            {
+                Log(std::string("[Stats] Exception lors de l'envoi : ") + e.what());
             }
             catch (...)
             {
-                // Ignore network errors
+                Log("[Stats] Exception inconnue lors de l'envoi");
             }
         }).detach();
     }, 1.5f);
