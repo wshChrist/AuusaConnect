@@ -396,24 +396,43 @@ void MatchmakingPlugin::PollSupabase()
             auto instr = arr.at(0);
             std::string name = instr.value("rl_name", "");
             std::string password = instr.value("rl_password", "");
+            std::string queueType = instr.value("queue_type", "");
+            int playersPerTeam = 0;
+            if (queueType == "1v1")
+                playersPerTeam = 1;
+            else if (queueType == "2v2")
+                playersPerTeam = 2;
+            else if (queueType == "3v3")
+                playersPerTeam = 3;
             if (name.empty())
             {
                 Log("[Supabase] Champ rl_name absent, aucune création de partie");
                 return;
             }
+            if (playersPerTeam == 0)
+            {
+                Log("[Supabase] queue_type invalide ou absent");
+                return;
+            }
             lastSupabaseName = name;
             lastSupabasePassword = password;
             Log("[Supabase] rl_name=" + name + ", rl_password=" + password);
-            gameWrapper->Execute([this, name, password](GameWrapper* gw) {
+            gameWrapper->Execute([this, name, password, playersPerTeam, queueType](GameWrapper* gw) {
                 auto mm = gw->GetMatchmakingWrapper();
                 if (mm)
                 {
                     CustomMatchSettings settings{};
                     settings.ServerName = name;
                     settings.Password = password;
-                    settings.MapName = "Stadium_P";
+                    settings.MapName = "DFHStadium_P";
+                    settings.GameMode = "Soccar";
+                    settings.bIsPrivateMatch = true;
+                    settings.bShouldUseBots = false;
+                    settings.bLockTeams = true;
+                    settings.NumPlayersPerTeam = playersPerTeam;
                     mm.CreatePrivateMatch(Region::EU, static_cast<int>(PlaylistIds::PrivateMatch), settings);
                     gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie créée automatiquement", "default", 3.0f);
+                    Log("[Supabase] File d'attente détectée : " + queueType);
                 }
             });
 
