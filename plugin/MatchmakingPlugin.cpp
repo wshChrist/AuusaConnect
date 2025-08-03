@@ -262,7 +262,7 @@ void MatchmakingPlugin::onLoad()
             }
         });
 
-    std::string playerName = gameWrapper->GetPlayerName();
+    std::string playerName = gameWrapper->GetPlayerName().ToString();
     if (!playerName.empty())
         cvarManager->getCvar("mm_player_id").setValue(playerName);
     else
