@@ -265,6 +265,21 @@ export function setupAdvancedMatchmaking(client) {
       const name = interaction.fields.getTextInputValue('name');
       const pwd = interaction.fields.getTextInputValue('password');
       await sbRequest('PATCH', `match_sessions?id=eq.${matchId}`, { body: { rl_name: name, rl_password: pwd, status: 'ready' } }).catch(() => {});
+      try {
+        const [host] = await sbRequest('GET', 'users', { query: `discord_id=eq.${match.hostId}` }).catch(() => []);
+        const playerId = host?.rl_name;
+        if (playerId) {
+          const encodedId = encodeURIComponent(playerId);
+          const creds = await sbRequest('GET', 'match_credentials', { query: `player_id=eq.${encodedId}` }).catch(() => []);
+          if (creds.length) {
+            await sbRequest('PATCH', `match_credentials?player_id=eq.${encodedId}`, { body: { rl_name: name, rl_password: pwd } }).catch(() => {});
+          } else {
+            await sbRequest('POST', 'match_credentials', { body: { player_id: playerId, rl_name: name, rl_password: pwd } }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.error('Erreur maj credentials', err);
+      }
       await interaction.reply({ content: 'Infos enregistrées.', ephemeral: true });
       const text = client.channels.cache.get(match.textId);
       if (text)

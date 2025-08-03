@@ -78,6 +78,16 @@ export function setupRegistration(client) {
       }
       const user = userRows[0];
 
+      // Ensure a match_credentials entry exists with player_id = rlName
+      try {
+        const creds = await sbRequest('GET', 'match_credentials', { query: `player_id=eq.${encodeURIComponent(rlName)}` });
+        if (!creds.length) {
+          await sbRequest('POST', 'match_credentials', { body: { player_id: rlName } });
+        }
+      } catch (err) {
+        console.error('Erreur création credentials', err);
+      }
+
       try {
         await interaction.member.setNickname(`[${user.mmr}] ${rlName}`);
       } catch (err) {
