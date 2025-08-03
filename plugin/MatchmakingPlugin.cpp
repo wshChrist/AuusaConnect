@@ -425,11 +425,13 @@ void MatchmakingPlugin::PollSupabase()
                     settings.ServerName = name;
                     settings.Password = password;
                     settings.MapName = "DFHStadium_P";
-                    settings.GameMode = "Soccar";
-                    settings.bIsPrivateMatch = true;
-                    settings.bShouldUseBots = false;
-                    settings.bLockTeams = true;
-                    settings.NumPlayersPerTeam = playersPerTeam;
+                    // 0 corresponds to the standard "Soccar" game mode
+                    settings.GameMode = 0;
+                    // New SDK expects the total number of players rather than per team
+                    settings.MaxPlayerCount = playersPerTeam * 2;
+                    // Restrict the lobby to party members only and disable club server behaviour
+                    settings.bPartyMembersOnly = true;
+                    settings.bClubServer = false;
                     mm.CreatePrivateMatch(Region::EU, static_cast<int>(PlaylistIds::PrivateMatch), settings);
                     gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie créée automatiquement", "default", 3.0f);
                     Log("[Supabase] File d'attente détectée : " + queueType);
