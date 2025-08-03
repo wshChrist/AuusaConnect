@@ -145,6 +145,7 @@ export function setupAdvancedMatchmaking(client) {
       players: players.map(p => p.id),
       textId: text.id,
       voiceId: voice.id,
+      queueType: info.type,
       candidates: is1v1 ? new Set(players.map(p => p.id)) : new Set(),
       hostId: null,
       teamVoiceIds: [],
@@ -271,11 +272,15 @@ export function setupAdvancedMatchmaking(client) {
         if (playerId) {
           const encodedId = encodeURIComponent(playerId);
           const creds = await sbRequest('GET', 'match_credentials', { query: `player_id=eq.${encodedId}` }).catch(() => []);
-          if (creds.length) {
-            await sbRequest('PATCH', `match_credentials?player_id=eq.${encodedId}`, { body: { rl_name: name, rl_password: pwd } }).catch(() => {});
-          } else {
-            await sbRequest('POST', 'match_credentials', { body: { player_id: playerId, rl_name: name, rl_password: pwd } }).catch(() => {});
-          }
+            if (creds.length) {
+              await sbRequest('PATCH', `match_credentials?player_id=eq.${encodedId}`, {
+                body: { rl_name: name, rl_password: pwd, queue_type: match.queueType }
+              }).catch(() => {});
+            } else {
+              await sbRequest('POST', 'match_credentials', {
+                body: { player_id: playerId, rl_name: name, rl_password: pwd, queue_type: match.queueType }
+              }).catch(() => {});
+            }
         }
       } catch (err) {
         console.error('Erreur maj credentials', err);
