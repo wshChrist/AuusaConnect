@@ -13,6 +13,7 @@
 #include <utility>
 #include <thread>
 #include <memory>
+#include <exception>
 
 using json = nlohmann::json;
 
@@ -491,9 +492,12 @@ void MatchmakingPlugin::TickStats()
 
 void MatchmakingPlugin::OnGameEnd()
 {
-    ServerWrapper sw = gameWrapper->GetCurrentGameState();
-    if (!sw)
-        return;
+    try
+    {
+        Log("[OnGameEnd] Debut du traitement");
+        ServerWrapper sw = gameWrapper->GetCurrentGameState();
+        if (!sw)
+            return;
 
     if (gameWrapper->IsInFreeplay())
     {
@@ -618,6 +622,16 @@ void MatchmakingPlugin::OnGameEnd()
             }
         }).detach();
     }, 1.5f);
+        Log("[OnGameEnd] Traitement termine");
+    }
+    catch (const std::exception& e)
+    {
+        Log(std::string("[ERREUR] Exception OnGameEnd : ") + e.what());
+    }
+    catch (...)
+    {
+        Log("[ERREUR] Exception inconnue dans OnGameEnd");
+    }
 }
 
 void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string /*eventName*/)
@@ -933,7 +947,10 @@ void MatchmakingPlugin::Log(const std::string& msg)
 {
     cvarManager->log(msg);
     if (logFile.is_open())
+    {
         logFile << msg << std::endl;
+        logFile.flush();
+    }
 }
 
 
