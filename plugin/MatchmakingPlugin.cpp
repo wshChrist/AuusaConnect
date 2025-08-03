@@ -256,7 +256,10 @@ void MatchmakingPlugin::LoadConfig()
 void MatchmakingPlugin::PollSupabase()
 {
     gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::PollSupabase, this), 3.0f);
-    if (gameWrapper->IsInGame())
+    // Ne pas interroger Supabase si l'on est déjà dans une partie en ligne.
+    // `IsInGame()` renvoie également vrai en entraînement ou en freeplay,
+    // ce qui empêchait toute requête lorsqu'on attendait dans ces modes.
+    if (gameWrapper->IsInOnlineGame())
         return;
 
     std::string playerId = cvarManager->getCvar("mm_player_id").getStringValue();
