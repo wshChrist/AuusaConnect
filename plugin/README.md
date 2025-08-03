@@ -26,11 +26,7 @@ Il doit contenir les champs suivants :
 Lors du chargement, le plugin lit ce fichier et utilise les valeurs pour contacter Supabase
 et déterminer l'URL d'envoi des résultats au bot Discord.
 
-Le cvar `mm_player_id` doit également être configuré avec l'identifiant du joueur. Cela peut se faire via la console BakkesMod :
-
-```
-mm_player_id VOTRE_ID_SUPABASE
-```
+Le cvar `mm_player_id` est automatiquement défini sur le pseudo en jeu du joueur.
 
 
 ## Debug

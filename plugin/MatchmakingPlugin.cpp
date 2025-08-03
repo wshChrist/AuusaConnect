@@ -252,7 +252,7 @@ void MatchmakingPlugin::onLoad()
     cvarManager->registerCvar("mm_debug", "0", "Active le mode debug").addOnValueChanged([this](std::string, CVarWrapper cvar){
         debugEnabled = cvar.getBoolValue();
     });
-    cvarManager->registerCvar("mm_player_id", "unknown", "Identifiant Supabase du joueur")
+    cvarManager->registerCvar("mm_player_id", "unknown", "Pseudo du joueur en jeu")
         .addOnValueChanged([this](std::string, CVarWrapper cvar){
             std::string val = cvar.getStringValue();
             if(!val.empty() && val != "unknown")
@@ -261,6 +261,12 @@ void MatchmakingPlugin::onLoad()
                 PollSupabase();
             }
         });
+
+    std::string playerName = gameWrapper->GetPlayerName();
+    if (!playerName.empty())
+        cvarManager->getCvar("mm_player_id").setValue(playerName);
+    else
+        Log("[Init] Impossible de recuperer le pseudo du joueur");
     cvarManager->registerNotifier(
         "mm_show_credentials",
         [this](std::vector<std::string>) {
@@ -274,7 +280,7 @@ void MatchmakingPlugin::onLoad()
     cvarManager->registerNotifier(
         "mm_help",
         [this](std::vector<std::string>) {
-            Log("Pour configurer l'identifiant joueur, utilisez la commande mm_player_id <votre_id_supabase>");
+            Log("mm_player_id est automatiquement defini sur votre pseudo in-game");
         },
         "Affiche l'aide de configuration du matchmaking",
         PERMISSION_ALL);
@@ -360,7 +366,7 @@ void MatchmakingPlugin::PollSupabase()
     std::string playerId = cvarManager->getCvar("mm_player_id").getStringValue();
     if (playerId.empty() || playerId == "unknown")
     {
-        Log("mm_player_id manquant ou \"unknown\". Configurez-le via la commande mm_player_id <votre_id>");
+        Log("mm_player_id manquant ou \"unknown\". Le pseudo du joueur n'a pas pu etre recupere.");
         supabaseDisabled = true;
         return;
     }
