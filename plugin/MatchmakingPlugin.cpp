@@ -417,7 +417,6 @@ void MatchmakingPlugin::PollSupabase()
                 }
             });
 
-            cpr::Delete(cpr::Url{supabaseUrl}, cpr::Parameters{{"player_id", "eq." + playerId}}, headers);
         }
         catch (const std::exception& e)
         {
@@ -655,6 +654,35 @@ void MatchmakingPlugin::OnGameEnd()
     {
         Log("Statistiques non generees : nombre de joueurs insuffisant pour analyser un match.");
         return;
+    }
+
+    std::string playerId = cvarManager->getCvar("mm_player_id").getStringValue();
+    if (!playerId.empty() && playerId != "unknown" &&
+        !supabaseUrl.empty() && !supabaseApiKey.empty() && !supabaseJwt.empty())
+    {
+        std::thread([this, playerId]() {
+            try
+            {
+                auto headers = cpr::Header{
+                    {"Authorization", "Bearer " + supabaseJwt},
+                    {"apikey", supabaseApiKey},
+                    {"Content-Type", "application/json"}
+                };
+                cpr::Patch(
+                    cpr::Url{supabaseUrl},
+                    cpr::Parameters{{"player_id", "eq." + playerId}},
+                    cpr::Body{"{\"rl_name\":null,\"rl_password\":null}"},
+                    headers);
+            }
+            catch (const std::exception& e)
+            {
+                Log(std::string("[Supabase] Exception lors du nettoyage : ") + e.what());
+            }
+            catch (...)
+            {
+                Log("[Supabase] Exception inconnue lors du nettoyage");
+            }
+        }).detach();
     }
 
     TeamWrapper blueTeam = sw.GetTeams().Get(0);
