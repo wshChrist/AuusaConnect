@@ -331,24 +331,24 @@ void MatchmakingPlugin::PollSupabase()
 void MatchmakingPlugin::HookEvents()
 {
     gameWrapper->HookEventWithCallerPost<ServerWrapper>(
-        "Function TAGame.GameEvent_Soccar_TA.EventMatchStarted",
+        "Function TAGame.GameEvent_Soccar_TA.OnGameStarted",
         std::bind(&MatchmakingPlugin::OnMatchStart, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     gameWrapper->HookEventPost(
-        "Function TAGame.GameEvent_Soccar_TA.EventMatchEnded",
+        "Function TAGame.GameEvent_Soccar_TA.OnGameEnded",
         std::bind(&MatchmakingPlugin::OnGameEnd, this));
 
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
-        "Function TAGame.Car_TA.EventHitBall",
+        "Function TAGame.Car_TA.OnHitBall",
         std::bind(&MatchmakingPlugin::OnHitBall, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
-        "Function TAGame.Car_TA.EventDemolish",
+        "Function TAGame.Car_TA.OnDemolished",
         std::bind(&MatchmakingPlugin::OnCarDemolish, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
-        "Function TAGame.CarComponent_Boost_TA.OnPickup",
+        "Function TAGame.CarComponent_Boost_TA.OnBoostCollected",
         std::bind(&MatchmakingPlugin::OnBoostCollected, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
