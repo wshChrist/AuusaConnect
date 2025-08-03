@@ -111,6 +111,7 @@ private:
     std::string supabaseJwt;
     std::string lastSupabaseName;
     std::string lastSupabasePassword;
+    bool supabaseDisabled = false;
 };
 
 static PriWrapper GetPriByName(ServerWrapper server, const std::string& name)
@@ -204,7 +205,15 @@ void MatchmakingPlugin::onLoad()
     cvarManager->registerCvar("mm_debug", "0", "Active le mode debug").addOnValueChanged([this](std::string, CVarWrapper cvar){
         debugEnabled = cvar.getBoolValue();
     });
-    cvarManager->registerCvar("mm_player_id", "unknown", "Identifiant Supabase du joueur");
+    cvarManager->registerCvar("mm_player_id", "unknown", "Identifiant Supabase du joueur")
+        .addOnValueChanged([this](std::string, CVarWrapper cvar){
+            std::string val = cvar.getStringValue();
+            if(!val.empty() && val != "unknown")
+            {
+                supabaseDisabled = false;
+                PollSupabase();
+            }
+        });
     cvarManager->registerNotifier(
         "mm_show_credentials",
         [this](std::vector<std::string>) {
@@ -214,6 +223,13 @@ void MatchmakingPlugin::onLoad()
                 Log("rl_name=" + lastSupabaseName + ", rl_password=" + lastSupabasePassword);
         },
         "Affiche les dernieres informations recuperees depuis Supabase",
+        PERMISSION_ALL);
+    cvarManager->registerNotifier(
+        "mm_help",
+        [this](std::vector<std::string>) {
+            Log("Pour configurer l'identifiant joueur, utilisez la commande mm_player_id <votre_id_supabase>");
+        },
+        "Affiche l'aide de configuration du matchmaking",
         PERMISSION_ALL);
     cvarManager->registerNotifier(
         "mm_poll_now",
@@ -253,13 +269,16 @@ void MatchmakingPlugin::LoadConfig()
 
 void MatchmakingPlugin::PollSupabase()
 {
-    gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::PollSupabase, this), 3.0f);
+    if (supabaseDisabled)
+        return;
+
     // Ne pas interroger Supabase si l'on est déjà dans une partie en ligne.
     // `IsInGame()` renvoie également vrai en entraînement ou en freeplay,
     // ce qui empêchait toute requête lorsqu'on attendait dans ces modes.
     if (gameWrapper->IsInOnlineGame())
     {
         Log("[Supabase] Requête ignorée : déjà en partie en ligne");
+        gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::PollSupabase, this), 3.0f);
         return;
     }
 
@@ -267,8 +286,10 @@ void MatchmakingPlugin::PollSupabase()
     if (playerId.empty() || playerId == "unknown")
     {
         Log("mm_player_id manquant ou \"unknown\". Configurez-le via la commande mm_player_id <votre_id>");
+        supabaseDisabled = true;
         return;
     }
+    gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::PollSupabase, this), 3.0f);
     if (supabaseUrl.empty() || supabaseApiKey.empty() || supabaseJwt.empty())
     {
         Log("[Supabase] Configuration Supabase incomplète");
