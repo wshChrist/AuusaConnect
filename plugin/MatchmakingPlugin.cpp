@@ -439,27 +439,37 @@ void MatchmakingPlugin::HookEvents()
         "Function TAGame.GameEvent_Soccar_TA.EventMatchStarted",
         std::bind(&MatchmakingPlugin::OnMatchStart, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    Log("[HOOK] EventMatchStarted OK");
+
     gameWrapper->HookEventPost(
-        "Function TAGame.GameEvent_Soccar_TA.EventGameEnded",
+        "Function TAGame.GameEvent_Soccar_TA.EventMatchEnded",
         std::bind(&MatchmakingPlugin::OnGameEnd, this));
+    Log("[HOOK] EventMatchEnded OK");
 
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
         "Function TAGame.Car_TA.OnHitBall",
         std::bind(&MatchmakingPlugin::OnHitBall, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    Log("[HOOK] OnHitBall OK");
+
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
         "Function TAGame.Car_TA.EventDemolished",
         std::bind(&MatchmakingPlugin::OnCarDemolish, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    Log("[HOOK] EventDemolished OK");
 
-    gameWrapper->HookEventWithCallerPost<CarWrapper>(
-        "Function TAGame.CarComponent_Boost_TA.EventBoostPickup",
-        std::bind(&MatchmakingPlugin::OnBoostCollected, this,
-                  std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    gameWrapper->HookEventWithCallerPost<BoostPickupWrapper>(
+        "Function TAGame.VehiclePickup_Boost_TA.Pickup",
+        [this](BoostPickupWrapper pickup, void* params, std::string eventName) {
+            CarWrapper car = params ? CarWrapper(*reinterpret_cast<uintptr_t*>(params)) : CarWrapper(nullptr);
+            OnBoostCollected(car, params, eventName);
+        });
+    Log("[HOOK] BoostPickup OK");
 
     gameWrapper->HookEventPost(
         "Function TAGame.GameEvent_Soccar_TA.EventGoalScored",
         std::bind(&MatchmakingPlugin::OnGoalScored, this, std::placeholders::_1));
+    Log("[HOOK] EventGoalScored OK");
     // On gère les démolitions directement dans OnCarDemolish,
     // cette écoute n'est plus nécessaire.
 }
