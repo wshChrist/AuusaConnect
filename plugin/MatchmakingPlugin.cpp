@@ -461,7 +461,8 @@ void MatchmakingPlugin::HookEvents()
     gameWrapper->HookEventWithCallerPost<BoostPickupWrapper>(
         "Function TAGame.VehiclePickup_Boost_TA.Pickup",
         [this](BoostPickupWrapper pickup, void* params, std::string eventName) {
-            CarWrapper car = params ? CarWrapper(*reinterpret_cast<uintptr_t*>(params)) : CarWrapper(nullptr);
+            // Si aucun paramètre n'est fourni, on construit un CarWrapper invalide
+            CarWrapper car = params ? CarWrapper(*reinterpret_cast<uintptr_t*>(params)) : CarWrapper(0);
             OnBoostCollected(car, params, eventName);
         });
     Log("[HOOK] BoostPickup OK");
