@@ -115,6 +115,7 @@ struct DefenderInfo {
     Vector pos;
     float boost;
     bool padNearby;
+    float distance;
 };
 
 class MatchmakingPlugin : public BakkesMod::Plugin::BakkesModPlugin
@@ -133,7 +134,7 @@ private:
     void OnGameEnd();
     void OnGoalScored(std::string eventName);
     std::string DetectShotContext(CarWrapper car, BallWrapper ball, int team, bool openNet, float gameTime, bool isAerial);
-    static float ComputeXGAdvanced(float distance, float angle, float ballSpeed, bool hasBoost, bool isAerial, const std::vector<DefenderInfo>& defenders, bool hardRebound, bool panicShot, bool openNet, bool qualityAction);
+    static float ComputeXGAdvanced(float distance, float angle, float ballSpeed, float playerBoost, bool isAerial, const std::vector<DefenderInfo>& defenders, bool hardRebound, bool panicShot, bool openNet, bool qualityAction);
 
     void PollSupabase();
     void LoadConfig();
@@ -182,30 +183,48 @@ static bool WasLastShotOnGoal(const BallWrapper& ball)
     return false;
 }
 
-float MatchmakingPlugin::ComputeXGAdvanced(float distance, float angle, float ballSpeed, bool hasBoost, bool isAerial, const std::vector<DefenderInfo>& defenders, bool hardRebound, bool panicShot, bool openNet, bool qualityAction)
+float MatchmakingPlugin::ComputeXGAdvanced(float distance, float angle, float ballSpeed, float playerBoost, bool isAerial, const std::vector<DefenderInfo>& defenders, bool hardRebound, bool panicShot, bool openNet, bool qualityAction)
 {
     float xg = 0.05f;
-    xg += std::clamp(1.f - distance / 5000.f, 0.f, 1.f) * 0.3f;
-    xg += std::clamp(1.f - angle / 1.57f, 0.f, 1.f) * 0.3f;
-    xg += std::clamp(ballSpeed / 3000.f, 0.f, 1.f) * 0.1f;
-    if (hasBoost)
-        xg += 0.05f;
-    if (isAerial)
-        xg -= 0.05f;
+    xg += std::exp(-distance / 2500.f) * 0.25f;
+    xg += std::clamp(1.f - angle / 1.57f, 0.f, 1.f) * 0.2f;
+    xg += std::clamp(ballSpeed / 4000.f, 0.f, 1.f) * 0.05f;
+    if (playerBoost > 20.f)
+        xg += 0.02f;
+
+    float openBonus = 0.f;
+    if (openNet)
+    {
+        openBonus = 0.25f;
+        for (const auto& d : defenders)
+        {
+            if (d.distance < 1000.f)
+                openBonus -= 0.1f;
+            else if (d.distance < 1500.f)
+                openBonus -= 0.05f;
+        }
+        if (openBonus > 0.f)
+            xg += openBonus;
+    }
+
+    int defCount = 0;
     for (const auto& d : defenders)
     {
-        if (d.boost > 20.f || d.padNearby)
-            xg -= 0.05f;
+        if (d.distance < 1500.f && d.boost > 30.f && defCount < 3)
+        {
+            xg -= 0.04f;
+            ++defCount;
+        }
     }
+
     if (hardRebound)
         xg -= 0.05f;
     if (panicShot)
-        xg -= 0.1f;
-    if (openNet)
-        xg += 0.4f;
+        xg -= 0.05f;
     if (qualityAction)
-        xg += 0.1f;
-    return std::clamp(xg, 0.f, 1.f);
+        xg += 0.05f;
+
+    return std::clamp(xg, 0.f, 0.95f);
 }
 
 std::string MatchmakingPlugin::DetectShotContext(CarWrapper car, BallWrapper ball, int team, bool openNet, float gameTime, bool isAerial)
@@ -979,11 +998,12 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
             if (!oc)
                 continue;
             Vector opos = oc.GetLocation();
-            if ((opos - pos).magnitude() < 2000.f)
+            float distToShooter = (opos - pos).magnitude();
+            if (distToShooter < 2000.f)
             {
                 BoostWrapper ob = oc.GetBoostComponent();
                 float oboost = ob ? ob.GetCurrentBoostAmount() : 0.f;
-                defenders.push_back({opos, oboost, false});
+                defenders.push_back({opos, oboost, false, distToShooter});
             }
             if (((team == 0 && opos.Y > ballPos.Y) || (team == 1 && opos.Y < ballPos.Y)) &&
                 std::fabs(opos.X - ballPos.X) < 800.f && (oc.GetBoostComponent() ? oc.GetBoostComponent().GetCurrentBoostAmount() : 0.f) > 5.f)
@@ -1010,7 +1030,7 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
             angle = acosf(std::clamp(dotVal, -1.f, 1.f));
         }
 
-        float xg = ComputeXGAdvanced(distance, angle, ballVel.magnitude(), playerBoost > 0.f, isAerial, defenders, hardRebound, panicShot, openNet, quality);
+        float xg = ComputeXGAdvanced(distance, angle, ballVel.magnitude(), playerBoost, isAerial, defenders, hardRebound, panicShot, openNet, quality);
         ps.xgAttempts.push_back(xg);
         ps.xgContext.push_back(context);
         if (WasLastShotOnGoal(ball))
