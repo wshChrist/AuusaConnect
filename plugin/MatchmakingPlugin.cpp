@@ -695,11 +695,13 @@ void MatchmakingPlugin::OnGameEnd()
                     {"apikey", supabaseApiKey},
                     {"Content-Type", "application/json"}
                 };
-                cpr::Patch(
+                auto res = cpr::Patch(
                     cpr::Url{supabaseUrl},
                     cpr::Parameters{{"player_id", "eq." + playerId}},
                     cpr::Body{"{\"rl_name\":null,\"rl_password\":null,\"queue_type\":null}"},
                     headers);
+                if (res.status_code >= 400)
+                    Log("[Supabase] Nettoyage echoue : HTTP " + std::to_string(res.status_code) + " - " + res.text);
             }
             catch (const std::exception& e)
             {
