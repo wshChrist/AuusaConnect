@@ -110,6 +110,7 @@ struct PlayerStats
     // Garde-fous pour la comptabilisation des evenements
     float lastDuelTime = -10.f;
     float lastMissedOpenGoalTime = -10.f;
+    float lastHighPressTime = -10.f;
 
     std::vector<float> xgAttempts;
     std::vector<std::string> xgContext;
@@ -603,6 +604,35 @@ void MatchmakingPlugin::TickStats()
 
             Vector pos = car.GetLocation();
             int team = pri.GetTeamNum2();
+            bool playerInOppHalf = (team == 0 && pos.Y > 0) || (team == 1 && pos.Y < 0);
+            bool ballInOppHalf = (team == 0 && ballLoc.Y > 0) || (team == 1 && ballLoc.Y < 0);
+            bool recentlyTouched = (lastTouchPlayer == name && now - lastTouchTime < 0.5f);
+            bool cooldown = (now - ps.lastHighPressTime < 2.f);
+            bool oppClose = false;
+
+            if (playerInOppHalf && ballInOppHalf && !recentlyTouched && !cooldown)
+            {
+                PriWrapper possPri = GetPriByName(sw, lastTouchPlayer);
+                if (possPri && possPri.GetTeamNum2() != team)
+                {
+                    CarWrapper oppCar = possPri.GetCar();
+                    if (oppCar)
+                    {
+                        Vector oppPos = oppCar.GetLocation();
+                        float oppDist = (oppPos - pos).magnitude();
+                        bool between = (team == 0) ? (oppPos.Y < pos.Y) : (oppPos.Y > pos.Y);
+                        if (oppDist < 2000.f && between)
+                            oppClose = true;
+                    }
+                }
+            }
+
+            if (oppClose)
+            {
+                ps.highPressings++;
+                ps.lastHighPressTime = now;
+                if (debugEnabled) Log("[DEBUG] High pressing compté pour " + name);
+            }
             bool inDef = (team == 0) ? pos.Y < 0 : pos.Y > 0;
             if (inDef)
                 ps.defenseTime += dt;
@@ -1106,8 +1136,6 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
     if (!car.AnyWheelTouchingGround())
         ps.aerialTouches++;
 
-    if ((team == 0 && loc.X > 0) || (team == 1 && loc.X < 0))
-        ps.highPressings++;
 }
 
 void MatchmakingPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::string /*eventName*/)
