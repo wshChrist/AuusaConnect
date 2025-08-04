@@ -267,18 +267,20 @@ export function setupAdvancedMatchmaking(client) {
       const pwd = interaction.fields.getTextInputValue('password');
       await sbRequest('PATCH', `match_sessions?id=eq.${matchId}`, { body: { rl_name: name, rl_password: pwd, status: 'ready' } }).catch(() => {});
       try {
-        const [host] = await sbRequest('GET', 'users', { query: `discord_id=eq.${match.hostId}` }).catch(() => []);
-        const playerId = host?.rl_name;
-        if (playerId) {
+        for (const discordId of match.players) {
+          const [user] = await sbRequest('GET', 'users', { query: `discord_id=eq.${discordId}` }).catch(() => []);
+          const playerId = user?.rl_name;
+          if (!playerId) continue;
           const encodedId = encodeURIComponent(playerId);
           const creds = await sbRequest('GET', 'match_credentials', { query: `player_id=eq.${encodedId}` }).catch(() => []);
+          const body = { rl_name: name, rl_password: pwd };
+          if (discordId === match.hostId)
+            body.queue_type = match.queueType;
           if (creds.length) {
-            await sbRequest('PATCH', `match_credentials?player_id=eq.${encodedId}`, {
-              body: { rl_name: name, rl_password: pwd }
-            }).catch(() => {});
+            await sbRequest('PATCH', `match_credentials?player_id=eq.${encodedId}`, { body }).catch(() => {});
           } else {
             await sbRequest('POST', 'match_credentials', {
-              body: { player_id: playerId, rl_name: name, rl_password: pwd }
+              body: { player_id: playerId, ...body }
             }).catch(() => {});
           }
         }
