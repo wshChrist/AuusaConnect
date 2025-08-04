@@ -1,14 +1,14 @@
 @echo on
 pushd "%~dp0"
-echo === Compilation du plugin Matchmaking (statique) ===
+echo === Compilation du plugin AuusaConnect (statique) ===
 echo Répertoire de travail : %CD%
 
 REM ============================ À ADAPTER ============================
 set "VS_PATH=C:\Program Files\Microsoft Visual Studio\2022\Community"
 set "BM_SDK=D:\BakkesModSDK"
 set "VCPKG_ROOT=D:\Travail\Travaux\AuusaConnect\vcpkg"
-set "SRC=plugin\MatchmakingPlugin.cpp"
-set "DLL=MatchmakingPlugin.dll"
+set "SRC=plugin\AuusaConnectPlugin.cpp"
+set "DLL=AuusaConnect.dll"
 set "DEST=%APPDATA%\bakkesmod\bakkesmod\plugins"
 REM ===================================================================
 
