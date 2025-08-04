@@ -860,12 +860,13 @@ export function setupTeam(client) {
             await interaction.reply({ content: 'Capitaine uniquement.', ephemeral: true });
             return;
           }
-          const existing = await sbRequest('GET', 'teams', { query: `parent_team_id=eq.${parent.id}` });
+          const parentId = Number(parent.id);
+          const existing = await sbRequest('GET', 'teams', { query: `parent_team_id=eq.${parentId}` });
           if (existing.length) {
             await interaction.reply({ content: 'Roster secondaire déjà existant.', ephemeral: true });
             return;
           }
-          const roster = await sbRequest('POST', 'teams', { body: { name, elo: 1000, captain_id: interaction.user.id, parent_team_id: parent.id } });
+          const roster = await sbRequest('POST', 'teams', { body: { name, elo: 1000, captain_id: interaction.user.id, parent_team_id: parentId } });
           await sbRequest('POST', 'team_members', { body: { user_id: interaction.user.id, team_id: roster[0].id } }).catch(() => {});
           await createRosterResources(interaction, name);
           await interaction.reply({ content: `Roster **${name}** créé.`, ephemeral: true });
