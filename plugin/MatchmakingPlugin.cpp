@@ -159,6 +159,7 @@ private:
     std::string lastSupabasePassword;
     bool supabaseDisabled = false;
     std::string botEndpoint = "http://localhost:3000/match";
+    bool creatingMatch = false;
 };
 
 static PriWrapper GetPriByName(ServerWrapper server, const std::string& name)
@@ -342,6 +343,13 @@ void MatchmakingPlugin::PollSupabase()
     if (supabaseDisabled)
         return;
 
+    if (creatingMatch)
+    {
+        Log("[Supabase] Requête ignorée : match en cours de création");
+        gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::PollSupabase, this), 3.0f);
+        return;
+    }
+
     // Ne pas interroger Supabase si l'on est déjà dans une partie en ligne.
     // `IsInGame()` renvoie également vrai en entraînement ou en freeplay,
     // ce qui empêchait toute requête lorsqu'on attendait dans ces modes.
@@ -396,45 +404,26 @@ void MatchmakingPlugin::PollSupabase()
             auto instr = arr.at(0);
             std::string name = instr.value("rl_name", "");
             std::string password = instr.value("rl_password", "");
-            std::string queueType = instr.value("queue_type", "");
-            int playersPerTeam = 0;
-            if (queueType == "1v1")
-                playersPerTeam = 1;
-            else if (queueType == "2v2")
-                playersPerTeam = 2;
-            else if (queueType == "3v3")
-                playersPerTeam = 3;
             if (name.empty())
             {
                 Log("[Supabase] Champ rl_name absent, aucune création de partie");
                 return;
             }
-            if (playersPerTeam == 0)
-            {
-                Log("[Supabase] queue_type invalide ou absent");
-                return;
-            }
             lastSupabaseName = name;
             lastSupabasePassword = password;
             Log("[Supabase] rl_name=" + name + ", rl_password=" + password);
-            gameWrapper->Execute([this, name, password, playersPerTeam, queueType](GameWrapper* gw) {
+            gameWrapper->Execute([this, name, password](GameWrapper* gw) {
                 auto mm = gw->GetMatchmakingWrapper();
                 if (mm)
                 {
                     CustomMatchSettings settings{};
                     settings.ServerName = name;
                     settings.Password = password;
-                    settings.MapName = "DFHStadium_P";
-                    // 0 corresponds to the standard "Soccar" game mode
-                    settings.GameMode = 0;
-                    // New SDK expects the total number of players rather than per team
-                    settings.MaxPlayerCount = playersPerTeam * 2;
-                    // Restrict the lobby to party members only and disable club server behaviour
-                    settings.bPartyMembersOnly = true;
-                    settings.bClubServer = false;
+                    settings.MapName = "Stadium_P";
+                    settings.MaxPlayerCount = 2; // 1v1
+                    creatingMatch = true;
                     mm.CreatePrivateMatch(Region::EU, static_cast<int>(PlaylistIds::PrivateMatch), settings);
                     gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie créée automatiquement", "default", 3.0f);
-                    Log("[Supabase] File d'attente détectée : " + queueType);
                 }
             });
 
@@ -660,6 +649,23 @@ void MatchmakingPlugin::OnGameEnd()
     try
     {
         Log("[OnGameEnd] Debut du traitement");
+
+        creatingMatch = false;
+
+        // Nettoie les cvars Rocket League afin d'eviter toute reutilisation accidentelle
+        auto clearCvar = [this](const std::string& name)
+        {
+            CVarWrapper cv = cvarManager->getCvar(name);
+            if (!cv.IsNull())
+                cv.setValue("");
+        };
+        clearCvar("rl_name");
+        clearCvar("rl_password");
+        clearCvar("queue_type");
+
+        lastSupabaseName.clear();
+        lastSupabasePassword.clear();
+
         ServerWrapper sw = gameWrapper->GetCurrentGameState();
         if (!sw)
             return;
@@ -689,11 +695,13 @@ void MatchmakingPlugin::OnGameEnd()
                     {"apikey", supabaseApiKey},
                     {"Content-Type", "application/json"}
                 };
-                cpr::Patch(
+                auto res = cpr::Patch(
                     cpr::Url{supabaseUrl},
                     cpr::Parameters{{"player_id", "eq." + playerId}},
                     cpr::Body{"{\"rl_name\":null,\"rl_password\":null}"},
                     headers);
+                if (res.status_code >= 400)
+                    Log("[Supabase] Nettoyage echoue : HTTP " + std::to_string(res.status_code) + " - " + res.text);
             }
             catch (const std::exception& e)
             {
