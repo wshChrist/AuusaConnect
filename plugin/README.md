@@ -1,6 +1,6 @@
-# Plugin Matchmaking Rocket League
+# Plugin AuusaConnect
 
-Ce dossier contient un squelette de plugin Bakkesmod.
+Ce dossier contient le plugin Bakkesmod AuusaConnect.
 
 ## Compilation
 
