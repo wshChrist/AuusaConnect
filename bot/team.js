@@ -59,9 +59,10 @@ async function sbRequest(method, table, { query = '', body } = {}) {
 async function findTeamByUser(userId) {
   const rows = await sbRequest('GET', 'team_members', { query: `user_id=eq.${userId}` });
   if (!rows.length) return null;
-  const teamId = rows[0].team_id;
-  const teams = await sbRequest('GET', 'teams', { query: `id=eq.${teamId}` });
-  return teams[0] || null;
+  const teamIds = rows.map(r => r.team_id).join(',');
+  const teams = await sbRequest('GET', `teams?id=in.(${teamIds})`);
+  const main = teams.find(t => !t.parent_team_id);
+  return main || teams[0] || null;
 }
 
 async function createTeamResources(interaction, name) {
@@ -137,6 +138,61 @@ async function createTeamResources(interaction, name) {
   return role;
 }
 
+async function createRosterResources(interaction, name) {
+  const guild = interaction.guild;
+  if (!guild) return;
+  const role = await guild.roles.create({ name }).catch(async err => {
+    console.error(err);
+    try {
+      await interaction.editReply({ content: `Erreur lors de la création du rôle pour le roster ${name}.` });
+    } catch {}
+    return null;
+  });
+  if (role) {
+    await interaction.member.roles.add(role).catch(() => {});
+  }
+  const perms = [
+    { id: guild.roles.everyone, deny: [PermissionsBitField.Flags.ViewChannel] },
+    ...(role
+      ? [
+          {
+            id: role.id,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.Connect,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.Speak
+            ]
+          }
+        ]
+      : [])
+  ];
+  await guild.channels
+    .create({
+      name: `🔒┃${name}`,
+      type: ChannelType.GuildText,
+      permissionOverwrites: perms
+    })
+    .catch(async err => {
+      console.error(err);
+      try {
+        await interaction.editReply({ content: `Erreur lors de la création du salon textuel pour le roster ${name}.` });
+      } catch {}
+    });
+  await guild.channels
+    .create({
+      name: `🎙️│${name}`,
+      type: ChannelType.GuildVoice,
+      permissionOverwrites: perms
+    })
+    .catch(async err => {
+      console.error(err);
+      try {
+        await interaction.editReply({ content: `Erreur lors de la création du salon vocal pour le roster ${name}.` });
+      } catch {}
+    });
+}
+
 async function buildTeamEmbed(team) {
   const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
   const list = members.map(m => `> – <@${m.user_id}>`).join('\n');
@@ -169,6 +225,20 @@ async function buildTeamEmbed(team) {
     .setTimestamp();
   embed.setImage(team.logo || 'https://i.imgur.com/HczhXhK.png');
   return embed;
+}
+
+async function buildRosterEmbed(team) {
+  const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
+  const list = members.map(m => `> – <@${m.user_id}>`).join('\n');
+  return new EmbedBuilder()
+    .setTitle(`📜 Roster secondaire : **${team.name}**`)
+    .addFields(
+      { name: '• 👑 Capitaine', value: `> <@${team.captain_id}>`, inline: true },
+      { name: `• 👥 Membres (${members.length}/6)`, value: list || '> – Aucun', inline: true },
+      { name: '• 🧠 Élo', value: `> ${team.elo}`, inline: true }
+    )
+    .setColor('#a47864')
+    .setTimestamp();
 }
 
 async function buildLeaderboardEmbed(page = 0) {
@@ -243,7 +313,42 @@ async function showMainMenu(interaction) {
     new ButtonBuilder().setCustomId('team_schedule').setLabel('🕹️ Programmer un match').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('team_disband').setLabel('❌ Dissoudre l\u2019équipe').setStyle(ButtonStyle.Danger)
   );
-  await interaction.editReply({ embeds: [embed], components: [row1, row2] });
+
+  const embeds = [embed];
+  const components = [row1, row2];
+
+  if (team.captain_id === interaction.user.id) {
+    const rosterRows = await sbRequest('GET', 'teams', { query: `parent_team_id=eq.${team.id}` });
+    if (!rosterRows.length) {
+      row2.addComponents(
+        new ButtonBuilder()
+          .setCustomId('team_add_roster')
+          .setLabel('➕ Ajouter un roster secondaire')
+          .setStyle(ButtonStyle.Primary)
+      );
+    } else {
+      const roster = rosterRows[0];
+      const rosterEmbed = await buildRosterEmbed(roster);
+      embeds.push(rosterEmbed);
+      const rosterRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`roster_invite_${roster.id}`)
+          .setLabel('📥 Inviter joueur')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`roster_remove_${roster.id}`)
+          .setLabel('📤 Retirer joueur')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`roster_delete_${roster.id}`)
+          .setLabel('❌ Supprimer roster')
+          .setStyle(ButtonStyle.Danger)
+      );
+      components.push(rosterRow);
+    }
+  }
+
+  await interaction.editReply({ embeds, components });
 }
 
 async function handleBroadcast(interaction) {
@@ -429,6 +534,26 @@ export function setupTeam(client) {
             .setCustomId('team_invite_select')
             .setPlaceholder('Sélectionne un joueur à inviter');
           await interaction.reply({ components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+        } else if (interaction.customId === 'team_add_roster') {
+          const team = await findTeamByUser(interaction.user.id);
+          if (!team || team.captain_id !== interaction.user.id) {
+            await interaction.reply({ content: 'Capitaine uniquement.', ephemeral: true });
+            return;
+          }
+          const modal = new ModalBuilder()
+            .setTitle('Créer un roster secondaire')
+            .setCustomId('team_add_roster_modal')
+            .addComponents(
+              new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                  .setCustomId('name')
+                  .setLabel('Nom du roster secondaire')
+                  .setStyle(TextInputStyle.Short)
+                  .setRequired(true)
+                  .setValue(`${team.name} - Roster 2`)
+              )
+            );
+          await interaction.showModal(modal);
         } else if (interaction.customId === 'team_members') {
           const team = await findTeamByUser(interaction.user.id);
           if (!team || team.captain_id !== interaction.user.id) {
@@ -524,12 +649,91 @@ export function setupTeam(client) {
           }
           await sbRequest('PATCH', `teams?id=eq.${team.id}`, { body: { captain_id: userId } });
           await interaction.reply({ content: `<@${userId}> est maintenant capitaine.`, ephemeral: true });
+        } else if (interaction.customId.startsWith('roster_invite_')) {
+          const rosterId = interaction.customId.split('_')[2];
+          const parent = await findTeamByUser(interaction.user.id);
+          if (!parent || parent.captain_id !== interaction.user.id) {
+            await interaction.reply({ content: 'Capitaine uniquement.', ephemeral: true });
+            return;
+          }
+          const menu = new UserSelectMenuBuilder()
+            .setCustomId(`roster_invite_select_${rosterId}`)
+            .setPlaceholder('Sélectionne un joueur à inviter');
+          await interaction.reply({ components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+        } else if (interaction.customId.startsWith('roster_remove_')) {
+          const rosterId = interaction.customId.split('_')[2];
+          const parent = await findTeamByUser(interaction.user.id);
+          if (!parent || parent.captain_id !== interaction.user.id) {
+            await interaction.reply({ content: 'Capitaine uniquement.', ephemeral: true });
+            return;
+          }
+          const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${rosterId}` });
+          const menu = new StringSelectMenuBuilder()
+            .setCustomId(`roster_remove_select_${rosterId}`)
+            .setPlaceholder('Choisis un joueur à retirer');
+          for (const m of members) menu.addOptions({ label: `@${m.user_id}`, value: String(m.user_id) });
+          await interaction.reply({ components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+        } else if (interaction.customId.startsWith('roster_delete_')) {
+          const rosterId = interaction.customId.split('_')[2];
+          const parent = await findTeamByUser(interaction.user.id);
+          if (!parent || parent.captain_id !== interaction.user.id) {
+            await interaction.reply({ content: 'Capitaine uniquement.', ephemeral: true });
+            return;
+          }
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`roster_delete_confirm_${rosterId}`)
+              .setLabel('Confirmer')
+              .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+              .setCustomId('roster_delete_cancel')
+              .setLabel('Annuler')
+              .setStyle(ButtonStyle.Secondary)
+          );
+          await interaction.reply({ content: 'Supprimer le roster ?', components: [row], ephemeral: true });
+        } else if (interaction.customId.startsWith('roster_delete_confirm_')) {
+          const rosterId = interaction.customId.split('_')[3];
+          const parent = await findTeamByUser(interaction.user.id);
+          if (!parent || parent.captain_id !== interaction.user.id) {
+            await interaction.reply({ content: 'Capitaine uniquement.', ephemeral: true });
+            return;
+          }
+          const rows = await sbRequest('GET', 'teams', { query: `id=eq.${rosterId}&parent_team_id=eq.${parent.id}` });
+          if (!rows.length) {
+            await interaction.update({ content: 'Roster introuvable.', components: [] });
+            return;
+          }
+          await sbRequest('DELETE', `team_members?team_id=eq.${rosterId}`);
+          await sbRequest('DELETE', `teams?id=eq.${rosterId}`);
+          if (interaction.guild) {
+            const role = interaction.guild.roles.cache.find(r => r.name === rows[0].name);
+            if (role) await role.delete().catch(() => {});
+            const text = interaction.guild.channels.cache.find(c => c.name === `🔒┃${rows[0].name}`);
+            if (text) await text.delete().catch(() => {});
+            const voice = interaction.guild.channels.cache.find(c => c.name === `🎙️│${rows[0].name}`);
+            if (voice) await voice.delete().catch(() => {});
+          }
+          await interaction.update({ content: `Roster **${rows[0].name}** supprimé.`, components: [] });
+        } else if (interaction.customId === 'roster_delete_cancel') {
+          await interaction.update({ content: 'Action annulée.', components: [] });
         }
       } else if (interaction.isUserSelectMenu()) {
         if (interaction.customId === 'team_invite_select') {
           const userId = interaction.values[0];
           const menu = new StringSelectMenuBuilder()
             .setCustomId(`team_invite_role_${userId}`)
+            .setPlaceholder('Choisis un rôle')
+            .addOptions(
+              { label: 'Membre', value: 'member' },
+              { label: 'Coach', value: 'coach' },
+              { label: 'Manager', value: 'manager' }
+            );
+          await interaction.update({ components: [new ActionRowBuilder().addComponents(menu)] });
+        } else if (interaction.customId.startsWith('roster_invite_select_')) {
+          const rosterId = interaction.customId.split('_')[3];
+          const userId = interaction.values[0];
+          const menu = new StringSelectMenuBuilder()
+            .setCustomId(`roster_invite_role_${rosterId}_${userId}`)
             .setPlaceholder('Choisis un rôle')
             .addOptions(
               { label: 'Membre', value: 'member' },
@@ -578,6 +782,49 @@ export function setupTeam(client) {
             await user.send({ embeds: [embed] });
           } catch {}
           await interaction.editReply({ content: `<@${userId}> a été invité dans **${team.name}**.`, components: [] });
+        } else if (interaction.customId.startsWith('roster_invite_role_')) {
+          const parts = interaction.customId.split('_');
+          const rosterId = parts[3];
+          const userId = parts[4];
+          const role = interaction.values[0];
+          await interaction.deferUpdate();
+          const parent = await findTeamByUser(interaction.user.id);
+          if (!parent || parent.captain_id !== interaction.user.id) {
+            await interaction.editReply({ content: 'Capitaine uniquement.', components: [] });
+            return;
+          }
+          const rosterRows = await sbRequest('GET', 'teams', { query: `id=eq.${rosterId}&parent_team_id=eq.${parent.id}` });
+          if (!rosterRows.length) {
+            await interaction.editReply({ content: 'Roster introuvable.', components: [] });
+            return;
+          }
+          const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${rosterId}` });
+          if (members.length >= 6) {
+            await interaction.editReply({ content: 'Roster complet (6 membres max).', components: [] });
+            return;
+          }
+          await sbRequest('POST', 'team_invitations', { body: { team_id: rosterId, user_id: userId, status: 'pending', role } });
+          const embed = new EmbedBuilder()
+            .setTitle('🎟️ Invitation à rejoindre une équipe')
+            .setDescription(`<@${interaction.user.id}> t\u2019a invité à rejoindre le roster **${rosterRows[0].name}** !\n\n🔹 Veux-tu rejoindre cette équipe et participer à des matchs classés ?\n\n✅ Réponds avec \`/team join ${rosterRows[0].name}\` pour accepter.`)
+            .setColor('#a47864')
+            .setFooter({ text: 'Auusa.gg - Connecté. Compétitif. Collectif.', iconURL: 'https://i.imgur.com/9FLBUiC.png' })
+            .setTimestamp();
+          try {
+            const user = await interaction.client.users.fetch(userId);
+            await user.send({ embeds: [embed] });
+          } catch {}
+          await interaction.editReply({ content: `<@${userId}> a été invité dans **${rosterRows[0].name}**.`, components: [] });
+        } else if (interaction.customId.startsWith('roster_remove_select_')) {
+          const rosterId = interaction.customId.split('_')[3];
+          const userId = interaction.values[0];
+          const parent = await findTeamByUser(interaction.user.id);
+          if (!parent || parent.captain_id !== interaction.user.id) {
+            await interaction.update({ content: 'Capitaine uniquement.', components: [] });
+            return;
+          }
+          await sbRequest('DELETE', `team_members?user_id=eq.${userId}&team_id=eq.${rosterId}`);
+          await interaction.update({ content: `<@${userId}> retiré du roster.`, components: [] });
         } else if (interaction.customId === 'team_search_select') {
           const teamId = interaction.values[0];
           const rows = await sbRequest('GET', 'teams', { query: `id=eq.${teamId}` });
@@ -606,6 +853,22 @@ export function setupTeam(client) {
           if (!rows.length) return interaction.reply({ content: 'Équipe introuvable.', ephemeral: true });
           await sbRequest('POST', 'team_members', { body: { user_id: interaction.user.id, team_id: rows[0].id } }).catch(() => {});
           await interaction.reply({ content: `Rejoint **${rows[0].name}** !`, ephemeral: true });
+        } else if (interaction.customId === 'team_add_roster_modal') {
+          const name = interaction.fields.getTextInputValue('name');
+          const parent = await findTeamByUser(interaction.user.id);
+          if (!parent || parent.captain_id !== interaction.user.id) {
+            await interaction.reply({ content: 'Capitaine uniquement.', ephemeral: true });
+            return;
+          }
+          const existing = await sbRequest('GET', 'teams', { query: `parent_team_id=eq.${parent.id}` });
+          if (existing.length) {
+            await interaction.reply({ content: 'Roster secondaire déjà existant.', ephemeral: true });
+            return;
+          }
+          const roster = await sbRequest('POST', 'teams', { body: { name, elo: 1000, captain_id: interaction.user.id, parent_team_id: parent.id } });
+          await sbRequest('POST', 'team_members', { body: { user_id: interaction.user.id, team_id: roster[0].id } }).catch(() => {});
+          await createRosterResources(interaction, name);
+          await interaction.reply({ content: `Roster **${name}** créé.`, ephemeral: true });
         } else if (interaction.customId.startsWith('team_edit_')) {
           const field = interaction.customId.replace('team_edit_', '');
           const value = interaction.fields.getTextInputValue(field);
