@@ -107,6 +107,10 @@ struct PlayerStats
     float timeSinceAttack = 0.f;
     int prevSaves = 0;
 
+    // Garde-fous pour la comptabilisation des evenements
+    float lastDuelTime = -10.f;
+    float lastMissedOpenGoalTime = -10.f;
+
     std::vector<float> xgAttempts;
     std::vector<std::string> xgContext;
 };
@@ -909,6 +913,7 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
         return;
 
     ArrayWrapper<PriWrapper> pris = sw.GetPRIs();
+    float now = sw.GetSecondsElapsed();
 
     std::string name = pri.GetPlayerName().ToString();
     PlayerStats &ps = stats[name];
@@ -945,12 +950,19 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
             break;
         }
     }
-    float oppTouch = fabs(sw.GetSecondsElapsed() - lastTeamTouchTime[team == 0 ? 1 : 0]);
+    float oppTouch = fabs(now - lastTeamTouchTime[team == 0 ? 1 : 0]);
     if (oppNearby && oppTouch < 0.2f)
     {
-        ps.challengesWon++;
-        if (debugEnabled)
-            Log("[DEBUG] Duel gagne par " + name);
+        if (now - ps.lastDuelTime >= 1.0f)
+        {
+            ps.challengesWon++;
+            ps.lastDuelTime = now;
+            if (debugEnabled)
+            {
+                Log("[DEBUG] Duel gagne par " + name);
+                Log("[DEBUG] Duel compté");
+            }
+        }
     }
 
     // block si la balle allait vers le but et repart a l'oppose
@@ -962,7 +974,7 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
             Log("[DEBUG] Block par " + name);
     }
 
-    float gameTime = sw.GetSecondsElapsed();
+    float gameTime = now;
 
     // Passe utile
     if (!lastTouchPlayer.empty() && lastTouchPlayer != name)
@@ -1037,7 +1049,15 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
             }
         }
         if (openNet)
-            ps.missedOpenGoals++;
+        {
+            if (gameTime - ps.lastMissedOpenGoalTime >= 2.0f)
+            {
+                ps.missedOpenGoals++;
+                ps.lastMissedOpenGoalTime = gameTime;
+                if (debugEnabled)
+                    Log("[DEBUG] Open goal raté compté");
+            }
+        }
 
         std::string context = DetectShotContext(car, ball, team, openNet, gameTime, isAerial);
         bool quality = context.find("double_tap") != std::string::npos || context.find("perfect_center") != std::string::npos;
