@@ -161,6 +161,7 @@ private:
     bool supabaseDisabled = false;
     std::string botEndpoint = "http://localhost:3000/match";
     bool creatingMatch = false;
+    bool autoJoined = false;
 };
 
 static PriWrapper GetPriByName(ServerWrapper server, const std::string& name)
@@ -369,6 +370,13 @@ void MatchmakingPlugin::PollSupabase()
         return;
     }
 
+    if (autoJoined)
+    {
+        Log("[Supabase] Requête ignorée : en attente de rejoindre la partie");
+        gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::PollSupabase, this), 3.0f);
+        return;
+    }
+
     // Ne pas interroger Supabase si l'on est déjà dans une partie en ligne.
     // `IsInGame()` renvoie également vrai en entraînement ou en freeplay,
     // ce qui empêchait toute requête lorsqu'on attendait dans ces modes.
@@ -423,28 +431,44 @@ void MatchmakingPlugin::PollSupabase()
             auto instr = arr.at(0);
             std::string name = instr.value("rl_name", "");
             std::string password = instr.value("rl_password", "");
+            std::string queueType = instr.value("queue_type", "");
             if (name.empty())
             {
-                Log("[Supabase] Champ rl_name absent, aucune création de partie");
+                Log("[Supabase] Champ rl_name absent, aucune action");
                 return;
             }
             lastSupabaseName = name;
             lastSupabasePassword = password;
             Log("[Supabase] rl_name=" + name + ", rl_password=" + password);
-            gameWrapper->Execute([this, name, password](GameWrapper* gw) {
-                auto mm = gw->GetMatchmakingWrapper();
-                if (mm)
-                {
-                    CustomMatchSettings settings{};
-                    settings.ServerName = name;
-                    settings.Password = password;
-                    settings.MapName = "Stadium_P";
-                    settings.MaxPlayerCount = 2; // 1v1
-                    creatingMatch = true;
-                    mm.CreatePrivateMatch(Region::EU, static_cast<int>(PlaylistIds::PrivateMatch), settings);
-                    gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie créée automatiquement", "default", 3.0f);
-                }
-            });
+            if (!queueType.empty())
+            {
+                gameWrapper->Execute([this, name, password](GameWrapper* gw) {
+                    auto mm = gw->GetMatchmakingWrapper();
+                    if (mm)
+                    {
+                        CustomMatchSettings settings{};
+                        settings.ServerName = name;
+                        settings.Password = password;
+                        settings.MapName = "Stadium_P";
+                        settings.MaxPlayerCount = 2; // 1v1
+                        creatingMatch = true;
+                        mm.CreatePrivateMatch(Region::EU, static_cast<int>(PlaylistIds::PrivateMatch), settings);
+                        gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie créée automatiquement", "default", 3.0f);
+                    }
+                });
+            }
+            else if (!autoJoined)
+            {
+                autoJoined = true;
+                gameWrapper->Execute([this, name, password](GameWrapper* gw) {
+                    auto mm = gw->GetMatchmakingWrapper();
+                    if (mm)
+                    {
+                        mm.JoinPrivateMatch(name, password);
+                        gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie rejointe automatiquement", "default", 3.0f);
+                    }
+                });
+            }
 
         }
         catch (const std::exception& e)
@@ -670,6 +694,7 @@ void MatchmakingPlugin::OnGameEnd()
         Log("[OnGameEnd] Debut du traitement");
 
         creatingMatch = false;
+        autoJoined = false;
 
         // Nettoie les cvars Rocket League afin d'eviter toute reutilisation accidentelle
         auto clearCvar = [this](const std::string& name)
