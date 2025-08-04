@@ -159,6 +159,7 @@ private:
     std::string lastSupabasePassword;
     bool supabaseDisabled = false;
     std::string botEndpoint = "http://localhost:3000/match";
+    bool creatingMatch = false;
 };
 
 static PriWrapper GetPriByName(ServerWrapper server, const std::string& name)
@@ -342,6 +343,13 @@ void MatchmakingPlugin::PollSupabase()
     if (supabaseDisabled)
         return;
 
+    if (creatingMatch)
+    {
+        Log("[Supabase] Requête ignorée : match en cours de création");
+        gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::PollSupabase, this), 3.0f);
+        return;
+    }
+
     // Ne pas interroger Supabase si l'on est déjà dans une partie en ligne.
     // `IsInGame()` renvoie également vrai en entraînement ou en freeplay,
     // ce qui empêchait toute requête lorsqu'on attendait dans ces modes.
@@ -413,6 +421,7 @@ void MatchmakingPlugin::PollSupabase()
                     settings.Password = password;
                     settings.MapName = "Stadium_P";
                     settings.MaxPlayerCount = 2; // 1v1
+                    creatingMatch = true;
                     mm.CreatePrivateMatch(Region::EU, static_cast<int>(PlaylistIds::PrivateMatch), settings);
                     gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie créée automatiquement", "default", 3.0f);
                 }
@@ -640,6 +649,8 @@ void MatchmakingPlugin::OnGameEnd()
     try
     {
         Log("[OnGameEnd] Debut du traitement");
+
+        creatingMatch = false;
 
         // Nettoie les cvars Rocket League afin d'eviter toute reutilisation accidentelle
         auto clearCvar = [this](const std::string& name)
