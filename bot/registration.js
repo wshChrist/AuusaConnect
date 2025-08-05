@@ -94,8 +94,15 @@ export function setupRegistration(client) {
         console.error('Erreur changement pseudo', err);
       }
 
-      const roleName = process.env.REGISTERED_ROLE || '🟢 Joueur enregistré';
-      const role = guild.roles.cache.find(r => r.name === roleName);
+      const roleName = process.env.REGISTERED_ROLE || 'Enregistré';
+      let role = guild.roles.cache.find(r => r.name === roleName);
+      if (!role) {
+        try {
+          role = await guild.roles.create({ name: roleName, reason: 'Role utilisateur enregistré' });
+        } catch {
+          role = null;
+        }
+      }
       if (role) await interaction.member.roles.add(role).catch(() => {});
 
       const embed = new EmbedBuilder()
