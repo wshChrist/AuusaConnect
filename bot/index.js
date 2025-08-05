@@ -155,7 +155,7 @@ app.post('/match', async (req, res) => {
     const { player: motmPlayer } = calculateMotm(players);
 
     const motmNote = motmPlayer
-      ? Math.min(10, (motmPlayer.score || 0) / 1000).toFixed(1)
+      ? Math.max(5, Math.min(10, (motmPlayer.score || 0) / 100)).toFixed(1)
       : '0';
 
     const blueClears = sum(bluePlayers, 'clearances');
