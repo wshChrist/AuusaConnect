@@ -56,10 +56,7 @@ const calculateMotm = players => {
   let best = null;
   let bestVal = -Infinity;
   for (const p of players) {
-    const rotation =
-      typeof p.rotationQuality === 'number' && p.rotationQuality > 0
-        ? p.rotationQuality
-        : 0;
+    const rotation = getRotationQuality(p);
     const val =
       (p.score || 0) +
       (p.goals || 0) * 100 +
@@ -76,10 +73,19 @@ const calculateMotm = players => {
 };
 
 const sum = (arr, field) => arr.reduce((acc, p) => acc + (p[field] || 0), 0);
+const getRotationQuality = p =>
+  typeof p.rotationQuality === 'number'
+    ? p.rotationQuality
+    : typeof p.scoreRot === 'number'
+    ? p.scoreRot / 100
+    : 0;
+
 const rotationScore = arr => {
-  const valid = arr.filter(p => typeof p.rotationQuality === 'number' && p.rotationQuality > 0);
+  const valid = arr
+    .map(getRotationQuality)
+    .filter(r => typeof r === 'number' && r > 0);
   if (!valid.length) return 0;
-  const avg = valid.reduce((acc, p) => acc + p.rotationQuality, 0) / valid.length;
+  const avg = valid.reduce((acc, r) => acc + r, 0) / valid.length;
   return Math.round(avg * 100);
 };
 
@@ -136,10 +142,14 @@ app.post('/match', async (req, res) => {
     teamOrange = 'Orange',
     scorers = [],
     mvp = '',
-    players = [],
+    players: rawPlayers = [],
     duration = '5:00',
     map = 'Inconnu'
   } = req.body;
+  const players = rawPlayers.map(p => ({
+    ...p,
+    rotationQuality: getRotationQuality(p)
+  }));
   if (channelId && client.channels.cache.has(channelId)) {
     const channel = client.channels.cache.get(channelId);
 
@@ -411,7 +421,7 @@ client.on('interactionCreate', async interaction => {
         {
           name: '🔄 Rotation',
           value:
-            `> ♻️ Qualité : **${Math.round((player.rotationQuality ?? 0) * 100)}%**\n` +
+            `> ♻️ Qualité : **${Math.round(getRotationQuality(player) * 100)}%**\n` +
             `> ✂️ Cuts : **${player.cuts ?? 0}**`,
           inline: true
         },
@@ -480,7 +490,7 @@ client.on('interactionCreate', async interaction => {
         {
           name: '🔄 Rotation',
           value:
-            `> ♻️ Qualité : ${Math.round((pB.rotationQuality ?? 0) * 100)}% / ${Math.round((pA.rotationQuality ?? 0) * 100)}%\n` +
+            `> ♻️ Qualité : ${Math.round(getRotationQuality(pB) * 100)}% / ${Math.round(getRotationQuality(pA) * 100)}%\n` +
             `> ✂️ Cuts : ${pB.cuts ?? 0} / ${pA.cuts ?? 0}`,
           inline: false
         }
