@@ -110,6 +110,7 @@ struct PlayerStats
     // Garde-fous pour la comptabilisation des evenements
     float lastDuelTime = -10.f;
     float lastMissedOpenGoalTime = -10.f;
+    float lastHighPressTime = -10.f;
 
     std::vector<float> xgAttempts;
     std::vector<std::string> xgContext;
@@ -122,7 +123,7 @@ struct DefenderInfo {
     float distance;
 };
 
-class MatchmakingPlugin : public BakkesMod::Plugin::BakkesModPlugin
+class AuusaConnectPlugin : public BakkesMod::Plugin::BakkesModPlugin
 {
 public:
     void onLoad() override;
@@ -188,7 +189,7 @@ static bool WasLastShotOnGoal(const BallWrapper& ball)
     return false;
 }
 
-float MatchmakingPlugin::ComputeXGAdvanced(float distance, float angle, float ballSpeed, float playerBoost, bool isAerial, const std::vector<DefenderInfo>& defenders, bool hardRebound, bool panicShot, bool openNet, bool qualityAction)
+float AuusaConnectPlugin::ComputeXGAdvanced(float distance, float angle, float ballSpeed, float playerBoost, bool isAerial, const std::vector<DefenderInfo>& defenders, bool hardRebound, bool panicShot, bool openNet, bool qualityAction)
 {
     float xg = 0.05f;
     xg += std::exp(-distance / 2500.f) * 0.25f;
@@ -232,7 +233,7 @@ float MatchmakingPlugin::ComputeXGAdvanced(float distance, float angle, float ba
     return std::clamp(xg, 0.f, 0.95f);
 }
 
-std::string MatchmakingPlugin::DetectShotContext(CarWrapper car, BallWrapper ball, int team, bool openNet, float gameTime, bool isAerial)
+std::string AuusaConnectPlugin::DetectShotContext(CarWrapper car, BallWrapper ball, int team, bool openNet, float gameTime, bool isAerial)
 {
     std::vector<std::string> ctx;
     BoostWrapper boost = car.GetBoostComponent();
@@ -272,7 +273,7 @@ std::string MatchmakingPlugin::DetectShotContext(CarWrapper car, BallWrapper bal
     return res;
 }
 
-void MatchmakingPlugin::onLoad()
+void AuusaConnectPlugin::onLoad()
 {
     cvarManager->registerCvar("mm_debug", "0", "Active le mode debug").addOnValueChanged([this](std::string, CVarWrapper cvar){
         debugEnabled = cvar.getBoolValue();
@@ -324,14 +325,14 @@ void MatchmakingPlugin::onLoad()
     PollSupabase();
 }
 
-void MatchmakingPlugin::onUnload()
+void AuusaConnectPlugin::onUnload()
 {
     Log("Plugin unloaded");
     if (logFile.is_open())
         logFile.close();
 }
 
-void MatchmakingPlugin::LoadConfig()
+void AuusaConnectPlugin::LoadConfig()
 {
     std::filesystem::path path = gameWrapper->GetDataFolder() / "config.json";
     std::ifstream file(path);
@@ -362,7 +363,7 @@ void MatchmakingPlugin::LoadConfig()
     Log("[Config] BOT_ENDPOINT=" + botEndpoint);
 }
 
-void MatchmakingPlugin::PollSupabase()
+void AuusaConnectPlugin::PollSupabase()
 {
     if (supabaseDisabled)
         return;
@@ -370,14 +371,14 @@ void MatchmakingPlugin::PollSupabase()
     if (creatingMatch)
     {
         Log("[Supabase] Requête ignorée : match en cours de création");
-        gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::PollSupabase, this), 3.0f);
+        gameWrapper->SetTimeout(std::bind(&AuusaConnectPlugin::PollSupabase, this), 3.0f);
         return;
     }
 
     if (autoJoined)
     {
         Log("[Supabase] Requête ignorée : en attente de rejoindre la partie");
-        gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::PollSupabase, this), 3.0f);
+        gameWrapper->SetTimeout(std::bind(&AuusaConnectPlugin::PollSupabase, this), 3.0f);
         return;
     }
 
@@ -387,7 +388,7 @@ void MatchmakingPlugin::PollSupabase()
     if (gameWrapper->IsInOnlineGame())
     {
         Log("[Supabase] Requête ignorée : déjà en partie en ligne");
-        gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::PollSupabase, this), 3.0f);
+        gameWrapper->SetTimeout(std::bind(&AuusaConnectPlugin::PollSupabase, this), 3.0f);
         return;
     }
 
@@ -409,7 +410,7 @@ void MatchmakingPlugin::PollSupabase()
         supabaseDisabled = true;
         return;
     }
-    gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::PollSupabase, this), 3.0f);
+    gameWrapper->SetTimeout(std::bind(&AuusaConnectPlugin::PollSupabase, this), 3.0f);
     if (supabaseUrl.empty() || supabaseApiKey.empty() || supabaseJwt.empty())
     {
         Log("[Supabase] Configuration Supabase incomplète");
@@ -457,7 +458,7 @@ void MatchmakingPlugin::PollSupabase()
                         settings.MaxPlayerCount = 2; // 1v1
                         creatingMatch = true;
                         mm.CreatePrivateMatch(Region::EU, static_cast<int>(PlaylistIds::PrivateMatch), settings);
-                        gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie créée automatiquement", "default", 3.0f);
+                        gw->Toast("AuusaConnect", "\xF0\x9F\x8E\xAE Partie créée automatiquement", "default", 3.0f);
                     }
                 });
             }
@@ -469,7 +470,7 @@ void MatchmakingPlugin::PollSupabase()
                     if (mm)
                     {
                         mm.JoinPrivateMatch(name, password);
-                        gw->Toast("Matchmaking", "\xF0\x9F\x8E\xAE Partie rejointe automatiquement", "default", 3.0f);
+                        gw->Toast("AuusaConnect", "\xF0\x9F\x8E\xAE Partie rejointe automatiquement", "default", 3.0f);
                     }
                 });
             }
@@ -486,7 +487,7 @@ void MatchmakingPlugin::PollSupabase()
     }).detach();
 }
 
-void MatchmakingPlugin::RefreshJwt()
+void AuusaConnectPlugin::RefreshJwt()
 {
     LoadConfig();
     if (jwtExpiry != 0 && std::time(nullptr) < jwtExpiry)
@@ -495,28 +496,28 @@ void MatchmakingPlugin::RefreshJwt()
         Log("[Supabase] Impossible de rafraîchir le JWT");
 }
 
-void MatchmakingPlugin::HookEvents()
+void AuusaConnectPlugin::HookEvents()
 {
     gameWrapper->HookEventWithCallerPost<ServerWrapper>(
         "Function TAGame.GameEvent_Soccar_TA.EventMatchStarted",
-        std::bind(&MatchmakingPlugin::OnMatchStart, this,
+        std::bind(&AuusaConnectPlugin::OnMatchStart, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     Log("[HOOK] EventMatchStarted OK");
 
     gameWrapper->HookEventPost(
         "Function TAGame.GameEvent_Soccar_TA.EventMatchEnded",
-        std::bind(&MatchmakingPlugin::OnGameEnd, this));
+        std::bind(&AuusaConnectPlugin::OnGameEnd, this));
     Log("[HOOK] EventMatchEnded OK");
 
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
         "Function TAGame.Car_TA.OnHitBall",
-        std::bind(&MatchmakingPlugin::OnHitBall, this,
+        std::bind(&AuusaConnectPlugin::OnHitBall, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     Log("[HOOK] OnHitBall OK");
 
     gameWrapper->HookEventWithCallerPost<CarWrapper>(
         "Function TAGame.Car_TA.EventDemolished",
-        std::bind(&MatchmakingPlugin::OnCarDemolish, this,
+        std::bind(&AuusaConnectPlugin::OnCarDemolish, this,
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     Log("[HOOK] EventDemolished OK");
 
@@ -531,13 +532,13 @@ void MatchmakingPlugin::HookEvents()
 
     gameWrapper->HookEventPost(
         "Function TAGame.GameEvent_Soccar_TA.EventGoalScored",
-        std::bind(&MatchmakingPlugin::OnGoalScored, this, std::placeholders::_1));
+        std::bind(&AuusaConnectPlugin::OnGoalScored, this, std::placeholders::_1));
     Log("[HOOK] EventGoalScored OK");
     // On gère les démolitions directement dans OnCarDemolish,
     // cette écoute n'est plus nécessaire.
 }
 
-void MatchmakingPlugin::OnMatchStart(ServerWrapper server, void* /*params*/, std::string /*eventName*/)
+void AuusaConnectPlugin::OnMatchStart(ServerWrapper server, void* /*params*/, std::string /*eventName*/)
 {
     stats.clear();
     lastUpdate = 0.f;
@@ -565,7 +566,7 @@ void MatchmakingPlugin::OnMatchStart(ServerWrapper server, void* /*params*/, std
     TickStats();
 }
 
-void MatchmakingPlugin::TickStats()
+void AuusaConnectPlugin::TickStats()
 {
     ServerWrapper sw = gameWrapper->GetCurrentGameState();
     if (sw)
@@ -603,6 +604,35 @@ void MatchmakingPlugin::TickStats()
 
             Vector pos = car.GetLocation();
             int team = pri.GetTeamNum2();
+            bool playerInOppHalf = (team == 0 && pos.Y > 0) || (team == 1 && pos.Y < 0);
+            bool ballInOppHalf = (team == 0 && ballLoc.Y > 0) || (team == 1 && ballLoc.Y < 0);
+            bool recentlyTouched = (lastTouchPlayer == name && now - lastTouchTime < 0.5f);
+            bool cooldown = (now - ps.lastHighPressTime < 2.f);
+            bool oppClose = false;
+
+            if (playerInOppHalf && ballInOppHalf && !recentlyTouched && !cooldown)
+            {
+                PriWrapper possPri = GetPriByName(sw, lastTouchPlayer);
+                if (possPri && possPri.GetTeamNum2() != team)
+                {
+                    CarWrapper oppCar = possPri.GetCar();
+                    if (oppCar)
+                    {
+                        Vector oppPos = oppCar.GetLocation();
+                        float oppDist = (oppPos - pos).magnitude();
+                        bool between = (team == 0) ? (oppPos.Y < pos.Y) : (oppPos.Y > pos.Y);
+                        if (oppDist < 2000.f && between)
+                            oppClose = true;
+                    }
+                }
+            }
+
+            if (oppClose)
+            {
+                ps.highPressings++;
+                ps.lastHighPressTime = now;
+                if (debugEnabled) Log("[DEBUG] High pressing compté pour " + name);
+            }
             bool inDef = (team == 0) ? pos.Y < 0 : pos.Y > 0;
             if (inDef)
                 ps.defenseTime += dt;
@@ -688,10 +718,10 @@ void MatchmakingPlugin::TickStats()
             }
         }
     }
-    gameWrapper->SetTimeout(std::bind(&MatchmakingPlugin::TickStats, this), 0.1f);
+    gameWrapper->SetTimeout(std::bind(&AuusaConnectPlugin::TickStats, this), 0.1f);
 }
 
-void MatchmakingPlugin::OnGameEnd()
+void AuusaConnectPlugin::OnGameEnd()
 {
     try
     {
@@ -895,7 +925,7 @@ void MatchmakingPlugin::OnGameEnd()
     }
 }
 
-void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string /*eventName*/)
+void AuusaConnectPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string /*eventName*/)
 {
     if (!car)
         return;
@@ -1106,11 +1136,9 @@ void MatchmakingPlugin::OnHitBall(CarWrapper car, void* /*params*/, std::string 
     if (!car.AnyWheelTouchingGround())
         ps.aerialTouches++;
 
-    if ((team == 0 && loc.X > 0) || (team == 1 && loc.X < 0))
-        ps.highPressings++;
 }
 
-void MatchmakingPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::string /*eventName*/)
+void AuusaConnectPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::string /*eventName*/)
 {
     if (!car)
         return;
@@ -1150,7 +1178,7 @@ void MatchmakingPlugin::OnCarDemolish(CarWrapper car, void* /*params*/, std::str
     }
 }
 
-void MatchmakingPlugin::OnBoostCollected(CarWrapper car, void* /*params*/, std::string)
+void AuusaConnectPlugin::OnBoostCollected(CarWrapper car, void* /*params*/, std::string)
 {
     if (!car)
         return;
@@ -1189,9 +1217,9 @@ void MatchmakingPlugin::OnBoostCollected(CarWrapper car, void* /*params*/, std::
     }
 }
 
-BAKKESMOD_PLUGIN(MatchmakingPlugin, "Matchmaking Plugin", "1.0", 0)
+BAKKESMOD_PLUGIN(AuusaConnectPlugin, "AuusaConnect", "0.1", 0)
 
-void MatchmakingPlugin::OnGoalScored(std::string)
+void AuusaConnectPlugin::OnGoalScored(std::string)
 {
     ServerWrapper sw = gameWrapper->GetCurrentGameState();
     if (!sw)
@@ -1221,7 +1249,7 @@ void MatchmakingPlugin::OnGoalScored(std::string)
         stats[assister].assists++;
 }
 
-void MatchmakingPlugin::Log(const std::string& msg)
+void AuusaConnectPlugin::Log(const std::string& msg)
 {
     cvarManager->log(msg);
     if (logFile.is_open())
