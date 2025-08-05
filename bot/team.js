@@ -228,17 +228,9 @@ async function buildTeamEmbed(team) {
 }
 
 async function buildRosterEmbed(team) {
-  const members = await sbRequest('GET', 'team_members', { query: `team_id=eq.${team.id}` });
-  const list = members.map(m => `> – <@${m.user_id}>`).join('\n');
-  return new EmbedBuilder()
-    .setTitle(`📜 Roster secondaire : **${team.name}**`)
-    .addFields(
-      { name: '• 👑 Capitaine', value: `> <@${team.captain_id}>`, inline: true },
-      { name: `• 👥 Membres (${members.length}/6)`, value: list || '> – Aucun', inline: true },
-      { name: '• 🧠 Élo', value: `> ${team.elo}`, inline: true }
-    )
-    .setColor('#a47864')
-    .setTimestamp();
+  const embed = await buildTeamEmbed(team);
+  embed.setTitle(`📜 Roster secondaire : **${team.name}**`);
+  return embed;
 }
 
 async function buildLeaderboardEmbed(page = 0) {
@@ -860,13 +852,12 @@ export function setupTeam(client) {
             await interaction.reply({ content: 'Capitaine uniquement.', ephemeral: true });
             return;
           }
-          const parentId = Number(parent.id);
-          const existing = await sbRequest('GET', 'teams', { query: `parent_team_id=eq.${parentId}` });
+          const existing = await sbRequest('GET', 'teams', { query: `parent_team_id=eq.${parent.id}` });
           if (existing.length) {
             await interaction.reply({ content: 'Roster secondaire déjà existant.', ephemeral: true });
             return;
           }
-          const roster = await sbRequest('POST', 'teams', { body: { name, elo: 1000, captain_id: interaction.user.id, parent_team_id: parentId } });
+          const roster = await sbRequest('POST', 'teams', { body: { name, elo: 1000, captain_id: interaction.user.id, parent_team_id: parent.id } });
           await sbRequest('POST', 'team_members', { body: { user_id: interaction.user.id, team_id: roster[0].id } }).catch(() => {});
           await createRosterResources(interaction, name);
           await interaction.reply({ content: `Roster **${name}** créé.`, ephemeral: true });
