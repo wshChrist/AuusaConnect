@@ -46,6 +46,14 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User]
 });
 const matchData = new Map();
+const recentMatches = new Set();
+
+function getMatchSignature(payload) {
+  const players = payload.players.map(p => p.name).sort().join('|');
+  const totalGoals = payload.scoreBlue + payload.scoreOrange;
+  const minuteBucket = Math.floor(Date.now() / 60000);
+  return `${payload.scoreBlue}-${payload.scoreOrange}-${totalGoals}-${players}-${minuteBucket}`;
+}
 setupMatchmaking(client);
 setupVerification(client);
 setupTeam(client);
@@ -129,6 +137,13 @@ async function runChannelSetup(interaction) {
 }
 
 app.post('/match', async (req, res) => {
+  const signature = getMatchSignature(req.body);
+  if (recentMatches.has(signature)) {
+    return res.sendStatus(200);
+  }
+  recentMatches.add(signature);
+  setTimeout(() => recentMatches.delete(signature), 10000);
+
   const {
     scoreBlue,
     scoreOrange,
