@@ -348,24 +348,46 @@ app.post('/match', async (req, res) => {
       })
       .setTimestamp();
 
-    const btn = new ButtonBuilder()
-      .setCustomId('details_joueur')
-      .setLabel('📊 Détails Joueurs')
-      .setStyle(ButtonStyle.Primary);
+    const sections = [
+      {
+        title: { id: 'title_infos', label: '📋 Infos & Analyse' },
+        buttons: [
+          { id: 'details_joueur', label: '🔍 Détails Joueurs', style: ButtonStyle.Primary },
+          { id: 'team_analysis_button', label: '📊 Analyse de la team' }
+        ]
+      },
+      {
+        title: { id: 'title_comparatifs', label: '⚔️ Comparatifs' },
+        buttons: [
+          { id: 'face_to_face_button', label: '🤜 Face-à-face' },
+          { id: 'player_ranking_button', label: '🏆 Classement joueurs' }
+        ]
+      },
+      {
+        title: { id: 'title_stats', label: '📈 Suivi & Stats globales' },
+        buttons: [
+          { id: 'history_button', label: '📅 Historique' },
+          { id: 'season_stats_button', label: '📈 Stats saison' }
+        ]
+      }
+    ];
 
-    const teamBtn = new ButtonBuilder()
-      .setCustomId('team_analysis_button')
-      .setLabel('🧠 Analyse de la team')
-      .setStyle(ButtonStyle.Secondary);
+    const rows = sections.map(({ title, buttons }) => {
+      const titleBtn = new ButtonBuilder()
+        .setCustomId(title.id)
+        .setLabel(title.label)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(true);
+      const activeBtns = buttons.map(b =>
+        new ButtonBuilder()
+          .setCustomId(b.id)
+          .setLabel(b.label)
+          .setStyle(b.style || ButtonStyle.Secondary)
+      );
+      return new ActionRowBuilder().addComponents(titleBtn, ...activeBtns);
+    });
 
-    const faceBtn = new ButtonBuilder()
-      .setCustomId('face_to_face_button')
-      .setLabel('🥊 Face-à-face')
-      .setStyle(ButtonStyle.Secondary);
-
-    const row = new ActionRowBuilder().addComponents(btn, teamBtn, faceBtn);
-
-    const message = await channel.send({ embeds: [embed], components: [row] });
+    const message = await channel.send({ embeds: [embed], components: rows });
     matchData.set(message.id, players);
     await handleMatchResult(req.body, client);
   }
@@ -493,6 +515,21 @@ client.on('interactionCreate', async interaction => {
       components: [new ActionRowBuilder().addComponents(select)],
       ephemeral: true
     });
+    return;
+  }
+
+  if (interaction.isButton() && interaction.customId === 'player_ranking_button') {
+    await interaction.reply({ content: 'Classement joueurs bientôt disponible.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  if (interaction.isButton() && interaction.customId === 'history_button') {
+    await interaction.reply({ content: 'Historique des matchs bientôt disponible.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  if (interaction.isButton() && interaction.customId === 'season_stats_button') {
+    await interaction.reply({ content: 'Stats saison bientôt disponibles.', flags: MessageFlags.Ephemeral });
     return;
   }
 
