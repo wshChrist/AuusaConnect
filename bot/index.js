@@ -48,6 +48,25 @@ const client = new Client({
 const matchData = new Map();
 const recentMatches = new Set();
 
+const mapTranslations = {
+  DFHStadium: 'Stade DFH',
+  Mannfield: 'Mannfield',
+  ChampionsField: 'Stade des Champions',
+  UrbanCentral: 'Centre urbain',
+  BeckwithPark: 'Parc Beckwith',
+  ForbiddenTemple: 'Temple interdit',
+  Aquadome: 'Aquadome',
+  UtopiaColiseum: 'Colisée Utopia',
+  NeoTokyo: 'Neo Tokyo',
+  Farmstead: 'Ferme',
+  RivalsArena: 'Arène des Rivaux'
+};
+
+function translateMap(name) {
+  if (!name) return 'Inconnu';
+  return mapTranslations[name] || name;
+}
+
 function getMatchSignature(payload) {
   const players = payload.players.map(p => p.name).sort().join('|');
   const totalGoals = payload.scoreBlue + payload.scoreOrange;
@@ -159,8 +178,9 @@ app.post('/match', async (req, res) => {
     mvp = '',
     players: rawPlayers = [],
     duration = '5:00',
-    map = 'Inconnu'
+    map: rawMap = ''
   } = req.body;
+  const map = translateMap(rawMap);
   const players = rawPlayers.map(p => ({
     ...p,
     rotationQuality: getRotationQuality(p)

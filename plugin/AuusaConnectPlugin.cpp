@@ -800,6 +800,7 @@ void AuusaConnectPlugin::OnGameEnd()
 
     std::string blueName = blueTeam.GetTeamName().ToString();
     std::string orangeName = orangeTeam.GetTeamName().ToString();
+    std::string mapName = sw.GetMapName().ToString();
 
     ArrayWrapper<PriWrapper> pris = sw.GetPRIs();
     json players = json::array();
@@ -878,6 +879,7 @@ void AuusaConnectPlugin::OnGameEnd()
         {"scoreOrange", scoreOrange},
         {"teamBlue", blueName},
         {"teamOrange", orangeName},
+        {"map", mapName},
         {"scorers", scorers},
         {"mvp", mvp},
         {"players", players}
