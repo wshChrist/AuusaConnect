@@ -873,6 +873,9 @@ void AuusaConnectPlugin::OnGameEnd()
         }
     }
 
+    float matchTime = sw.GetSecondsElapsed();
+    int overtime = std::max(0, static_cast<int>(std::round(matchTime - 300.f)));
+
     json payload = {
         {"scoreBlue", scoreBlue},
         {"scoreOrange", scoreOrange},
@@ -880,7 +883,8 @@ void AuusaConnectPlugin::OnGameEnd()
         {"teamOrange", orangeName},
         {"scorers", scorers},
         {"mvp", mvp},
-        {"players", players}
+        {"players", players},
+        {"overtime", overtime}
     };
 
     if (debugEnabled)
