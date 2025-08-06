@@ -362,8 +362,16 @@ async function handleBroadcast(interaction) {
   await interaction.reply({ content: 'Envoi en cours...', ephemeral: true });
 
   let embedData;
+  let content;
   try {
-    embedData = JSON.parse(embedJson);
+    const parsed = JSON.parse(embedJson);
+    if (Array.isArray(parsed.embeds)) {
+      embedData = parsed.embeds[0] || {};
+      content = parsed.content;
+    } else {
+      embedData = parsed;
+    }
+
     if (typeof embedData.description !== 'string' || embedData.description.trim() === '') {
       embedData.description = '\u200B';
     }
@@ -385,6 +393,10 @@ async function handleBroadcast(interaction) {
   }
 
   const embed = EmbedBuilder.from(embedData);
+  const payload = { embeds: [embed] };
+  if (typeof content === 'string' && content.trim() !== '') {
+    payload.content = content;
+  }
 
   const sentTo = [];
   for (const t of teams) {
@@ -401,7 +413,7 @@ async function handleBroadcast(interaction) {
     }
     if (channel) {
       try {
-        const msg = await channel.send({ embeds: [embed] });
+        const msg = await channel.send(payload);
         if (mode === 'binaire') {
           await msg.react('✅');
           await msg.react('❌');
