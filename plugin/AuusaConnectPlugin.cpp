@@ -1,3 +1,4 @@
+#define NOMINMAX
 #include "bakkesmod/plugin/bakkesmodplugin.h"
 #include "bakkesmod/wrappers/WrapperStructs.h"
 #include "bakkesmod/wrappers/MatchmakingWrapper.h"
@@ -15,6 +16,9 @@
 #include <memory>
 #include <exception>
 #include <ctime>
+
+#undef min
+#undef max
 
 using json = nlohmann::json;
 
@@ -802,7 +806,7 @@ void AuusaConnectPlugin::OnGameEnd()
 
     std::string blueName = blueTeam.GetTeamName().ToString();
     std::string orangeName = orangeTeam.GetTeamName().ToString();
-    std::string mapName = sw.GetMapName().ToString();
+    std::string mapName = gameWrapper->GetCurrentMap();
 
     ArrayWrapper<PriWrapper> pris = sw.GetPRIs();
     json players = json::array();
