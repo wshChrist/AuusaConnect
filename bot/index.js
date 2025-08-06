@@ -48,6 +48,105 @@ const client = new Client({
 const matchData = new Map();
 const recentMatches = new Set();
 
+const mapIdMap = {
+  cs_p: 'Champions Field',
+  cs_day_p: 'Champions Field (Day)',
+  cs_night_p: 'Champions Field (Night)',
+  cs_rain_p: 'Champions Field (Storm)',
+  stadium_p: 'DFH Stadium',
+  stadium_day_p: 'DFH Stadium (Day)',
+  stadium_fog_p: 'DFH Stadium (Storm)',
+  stadium_night_p: 'DFH Stadium (Night)',
+  stadium_winter_p: 'DFH Stadium (Snowy)',
+  stadium_10a_p: 'DFH Stadium (Day)',
+  stadium_10b_p: 'DFH Stadium (Storm)',
+  stadium_10_p: 'DFH Stadium (Night)',
+  eurostadium_p: 'Mannfield',
+  eurostadium_day_p: 'Mannfield (Day)',
+  eurostadium_night_p: 'Mannfield (Night)',
+  eurostadium_snow_p: 'Mannfield (Snowy)',
+  park_p: 'Beckwith Park',
+  park_night_p: 'Beckwith Park (Midnight)',
+  park_rain_p: 'Beckwith Park (Storm)',
+  park_snow_p: 'Beckwith Park (Snowy)',
+  trainstation_p: 'Urban Central',
+  trainstation_day_p: 'Urban Central (Dawn)',
+  trainstation_night_p: 'Urban Central (Night)',
+  utopiastadium_p: 'Utopia Coliseum',
+  utopiastadium_dusk_p: 'Utopia Coliseum (Dusk)',
+  utopiastadium_night_p: 'Utopia Coliseum (Night)',
+  utopiastadium_snow_p: 'Utopia Coliseum (Snowy)',
+  neotokyo_p: 'Neo Tokyo',
+  underwater_p: 'Aquadome',
+  junkyard_p: 'Wasteland',
+  junkyard_night_p: 'Wasteland (Night)',
+  farm_p: 'Farmstead',
+  farm_night_p: 'Farmstead (Night)',
+  farm_upsidedown_p: 'Farmstead (Storm)',
+  chinatown_p: 'Forbidden Temple',
+  chinatown_day_p: 'Forbidden Temple (Day)',
+  beach_p: 'Salty Shores',
+  beach_night_p: 'Salty Shores (Night)',
+  rivalarena_p: 'Rivals Arena',
+  arc_p: 'Starbase ARC',
+  arc_dawn_p: 'Starbase ARC (Aftermath)',
+  throwbackstadium_p: 'Throwback Stadium'
+};
+
+const mapTranslations = {
+  'Champions Field': 'Stade des Champions',
+  'Champions Field (Day)': 'Stade des Champions (Jour)',
+  'Champions Field (Night)': 'Stade des Champions (Nuit)',
+  'Champions Field (Storm)': 'Stade des Champions (Orage)',
+  'DFH Stadium': 'Stade DFH',
+  'DFH Stadium (Day)': 'Stade DFH (Jour)',
+  'DFH Stadium (Storm)': 'Stade DFH (Orage)',
+  'DFH Stadium (Night)': 'Stade DFH (Nuit)',
+  'DFH Stadium (Snowy)': 'Stade DFH (Neige)',
+  Mannfield: 'Mannfield',
+  'Mannfield (Day)': 'Mannfield (Jour)',
+  'Mannfield (Night)': 'Mannfield (Nuit)',
+  'Mannfield (Snowy)': 'Mannfield (Neige)',
+  'Beckwith Park': 'Parc Beckwith',
+  'Beckwith Park (Midnight)': 'Parc Beckwith (Minuit)',
+  'Beckwith Park (Storm)': 'Parc Beckwith (Orage)',
+  'Beckwith Park (Snowy)': 'Parc Beckwith (Neige)',
+  'Urban Central': 'Centre urbain',
+  'Urban Central (Dawn)': 'Centre urbain (Aube)',
+  'Urban Central (Night)': 'Centre urbain (Nuit)',
+  'Utopia Coliseum': 'Colisée Utopia',
+  'Utopia Coliseum (Dusk)': 'Colisée Utopia (Crépuscule)',
+  'Utopia Coliseum (Night)': 'Colisée Utopia (Nuit)',
+  'Utopia Coliseum (Snowy)': 'Colisée Utopia (Neige)',
+  'Neo Tokyo': 'Neo Tokyo',
+  Aquadome: 'Aquadome',
+  Wasteland: 'Terre désolée',
+  'Wasteland (Night)': 'Terre désolée (Nuit)',
+  Farmstead: 'Ferme',
+  'Farmstead (Night)': 'Ferme (Nuit)',
+  'Farmstead (Storm)': 'Ferme (Orage)',
+  'Forbidden Temple': 'Temple interdit',
+  'Forbidden Temple (Day)': 'Temple interdit (Jour)',
+  'Salty Shores': 'Salty Shores',
+  'Salty Shores (Night)': 'Salty Shores (Nuit)',
+  'Rivals Arena': 'Arène des Rivaux',
+  'Starbase ARC': 'Starbase ARC',
+  'Starbase ARC (Aftermath)': 'Starbase ARC (Après collision)',
+  'Throwback Stadium': 'Stade rétro'
+};
+
+function translateMap(raw) {
+  if (!raw) return 'Inconnu';
+  const key = raw.toLowerCase();
+  let name = mapIdMap[key];
+  if (!name) {
+    name = raw.replace(/_/g, ' ');
+  }
+  const translated = mapTranslations[name];
+  if (translated) return translated;
+  return name.replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function getMatchSignature(payload) {
   const players = payload.players.map(p => p.name).sort().join('|');
   const totalGoals = payload.scoreBlue + payload.scoreOrange;
@@ -159,8 +258,9 @@ app.post('/match', async (req, res) => {
     mvp = '',
     players: rawPlayers = [],
     duration = '5:00',
-    map = 'Inconnu'
+    map: rawMap = ''
   } = req.body;
+  const map = translateMap(rawMap);
   const players = rawPlayers.map(p => ({
     ...p,
     rotationQuality: getRotationQuality(p)
