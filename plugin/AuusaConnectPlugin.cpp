@@ -154,6 +154,7 @@ private:
     Vector lastBallLocation{0.f, 0.f, 0.f};
     Vector lastBallVel;
     float lastUpdate = 0.f;
+    int lastTotalScore = 0;
     bool debugEnabled = false;
     std::ofstream logFile;
     void Log(const std::string& msg);
@@ -540,6 +541,7 @@ void AuusaConnectPlugin::HookEvents()
 
 void AuusaConnectPlugin::OnMatchStart(ServerWrapper server, void* /*params*/, std::string /*eventName*/)
 {
+    lastTotalScore = 0;
     stats.clear();
     lastUpdate = 0.f;
     lastTouchPlayer.clear();
@@ -1230,6 +1232,17 @@ void AuusaConnectPlugin::OnGoalScored(std::string)
     ServerWrapper sw = gameWrapper->GetCurrentGameState();
     if (!sw)
         return;
+
+    TeamWrapper blueTeam = sw.GetTeams().Get(0);
+    TeamWrapper orangeTeam = sw.GetTeams().Get(1);
+    int totalScore = 0;
+    if (blueTeam)
+        totalScore += blueTeam.GetScore();
+    if (orangeTeam)
+        totalScore += orangeTeam.GetScore();
+    if (totalScore == lastTotalScore)
+        return;
+    lastTotalScore = totalScore;
 
     // Certaines versions du SDK ne fournissent pas la méthode GetLastGoalScorer.
     // On détermine donc le buteur à partir du dernier joueur ayant touché la balle.
