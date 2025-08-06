@@ -158,9 +158,13 @@ app.post('/match', async (req, res) => {
     scorers = [],
     mvp = '',
     players: rawPlayers = [],
-    duration = '5:00',
+    overtime = 0,
     map = 'Inconnu'
   } = req.body;
+  const totalSeconds = 300 + Number(overtime || 0);
+  const duration = `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(
+    Math.floor(totalSeconds % 60)
+  ).padStart(2, '0')}`;
   const players = rawPlayers.map(p => ({
     ...p,
     rotationQuality: getRotationQuality(p)
