@@ -1,4 +1,15 @@
-import { ApplicationCommandOptionType, EmbedBuilder, MessageFlags } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ApplicationCommandOptionType,
+  PermissionsBitField
+} from 'discord.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -28,61 +39,139 @@ async function sbRequest(method, table, { query = '', body } = {}) {
   });
   if (!res.ok) {
     let msg;
-    try { msg = (await res.json()).message; } catch { msg = res.statusText; }
+    try {
+      msg = (await res.json()).message;
+    } catch {
+      msg = res.statusText;
+    }
     throw new Error(msg);
   }
   return res.json();
 }
+
+export const registrationButton = new ActionRowBuilder().addComponents(
+  new ButtonBuilder()
+    .setCustomId('registration_start')
+    .setLabel("S'enregistrer")
+    .setStyle(ButtonStyle.Primary)
+);
 
 export function setupRegistration(client) {
   client.once('ready', async () => {
     try {
       await client.application.commands.create({
         name: 'enregistrement',
-        description: 'Lier votre pseudo Rocket League',
+        description: "Envoyer le bouton d'enregistrement",
         options: [
           {
-            name: 'pseudo',
-            description: 'Pseudo Rocket League',
+            name: 'channel',
+            description: 'Salon où afficher le message',
+            type: ApplicationCommandOptionType.Channel,
+            required: true
+          },
+          {
+            name: 'message',
+            description: 'Contenu du message',
             type: ApplicationCommandOptionType.String,
             required: true
           }
         ]
       });
     } catch (err) {
-      console.error('Création commande /enregistrement échouée', err);
+      console.error("Création commande /enregistrement échouée", err);
     }
   });
 
   client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand() || interaction.commandName !== 'enregistrement') return;
-    const rlName = interaction.options.getString('pseudo').trim();
+    if (interaction.isChatInputCommand() && interaction.commandName === 'enregistrement') {
+      const perms = interaction.memberPermissions || interaction.member?.permissions;
+      if (!perms?.has(PermissionsBitField.Flags.ManageMessages)) {
+        await interaction.reply({ content: 'Permissions insuffisantes.', ephemeral: true });
+        return;
+      }
+      const channel = interaction.options.getChannel('channel');
+      const message = interaction.options.getString('message');
+      try {
+        await channel.send({ content: message, components: [registrationButton] });
+        await interaction.reply({ content: 'Bouton envoyé.', ephemeral: true });
+      } catch (err) {
+        console.error(err);
+        await interaction.reply({ content: `Erreur : ${err.message}`, ephemeral: true });
+      }
+      return;
+    }
+    if (interaction.isButton() && interaction.customId === 'registration_start') {
+      const modal = new ModalBuilder()
+        .setCustomId('registration_modal')
+        .setTitle('Enregistrement')
+        .addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('pseudo')
+              .setLabel('Pseudo Rocket League')
+              .setStyle(TextInputStyle.Short)
+              .setRequired(true)
+          )
+        );
+      await interaction.showModal(modal);
+      return;
+    }
+
+    if (!interaction.isModalSubmit() || interaction.customId !== 'registration_modal') return;
+
+    const rlName = interaction.fields.getTextInputValue('pseudo').trim();
     const guild = interaction.guild;
-    if (!guild) return interaction.reply({ content: 'Commande uniquement sur un serveur.', flags: MessageFlags.Ephemeral });
+    if (!guild)
+      return interaction.reply({
+        content: 'Commande uniquement sur un serveur.',
+        flags: MessageFlags.Ephemeral
+      });
 
     try {
-      const existing = await sbRequest('GET', 'users', { query: `rl_name=eq.${encodeURIComponent(rlName)}` });
+      const existing = await sbRequest('GET', 'users', {
+        query: `rl_name=eq.${encodeURIComponent(rlName)}`
+      });
       if (existing.length && existing[0].discord_id !== interaction.user.id) {
-        return interaction.reply({ content: 'Ce pseudo Rocket League est déjà utilisé.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+          content: 'Ce pseudo Rocket League est déjà utilisé.',
+          flags: MessageFlags.Ephemeral
+        });
       }
 
-      let userRows = await sbRequest('GET', 'users', { query: `discord_id=eq.${interaction.user.id}` });
+      let userRows = await sbRequest('GET', 'users', {
+        query: `discord_id=eq.${interaction.user.id}`
+      });
       if (userRows.length) {
-        const body = { rl_name: rlName, registered_at: new Date().toISOString() };
+        const body = {
+          rl_name: rlName,
+          registered_at: new Date().toISOString()
+        };
         if (userRows[0].mmr === null) body.mmr = 1200;
-        await sbRequest('PATCH', `users?discord_id=eq.${interaction.user.id}`, { body });
-        userRows = await sbRequest('GET', 'users', { query: `discord_id=eq.${interaction.user.id}` });
+        await sbRequest('PATCH', `users?discord_id=eq.${interaction.user.id}`, {
+          body
+        });
+        userRows = await sbRequest('GET', 'users', {
+          query: `discord_id=eq.${interaction.user.id}`
+        });
       } else {
-        const body = { discord_id: interaction.user.id, rl_name: rlName, mmr: 1200, registered_at: new Date().toISOString() };
+        const body = {
+          discord_id: interaction.user.id,
+          rl_name: rlName,
+          mmr: 1200,
+          registered_at: new Date().toISOString()
+        };
         userRows = await sbRequest('POST', 'users', { body });
       }
       const user = userRows[0];
 
-      // Ensure a match_credentials entry exists with player_id = rlName
       try {
-        const creds = await sbRequest('GET', 'match_credentials', { query: `player_id=eq.${encodeURIComponent(rlName)}` });
+        const creds = await sbRequest('GET', 'match_credentials', {
+          query: `player_id=eq.${encodeURIComponent(rlName)}`
+        });
         if (!creds.length) {
-          await sbRequest('POST', 'match_credentials', { body: { player_id: rlName } });
+          await sbRequest('POST', 'match_credentials', {
+            body: { player_id: rlName }
+          });
         }
       } catch (err) {
         console.error('Erreur création credentials', err);
@@ -98,7 +187,10 @@ export function setupRegistration(client) {
       let role = guild.roles.cache.find(r => r.name === roleName);
       if (!role) {
         try {
-          role = await guild.roles.create({ name: roleName, reason: 'Role utilisateur enregistré' });
+          role = await guild.roles.create({
+            name: roleName,
+            reason: 'Role utilisateur enregistré'
+          });
         } catch {
           role = null;
         }
@@ -109,18 +201,24 @@ export function setupRegistration(client) {
         .setTitle('✅ Enregistrement terminé !')
         .setDescription(
           `🎮 Pseudo Rocket League : **${rlName}**\n` +
-          `🧠 MMR initial : **${user.mmr}**\n` +
-          `📎 Ton pseudo a été mis à jour → \`[${user.mmr}] ${rlName}\`\n` +
-          '🟢 Tu peux maintenant rejoindre les vocaux de matchmaking.'
+            `🧠 MMR initial : **${user.mmr}**\n` +
+            `📎 Ton pseudo a été mis à jour → \`[${user.mmr}] ${rlName}\`\n` +
+            '🟢 Tu peux maintenant rejoindre les vocaux de matchmaking.'
         )
         .setColor('#a47864')
-        .setFooter({ text: 'Auusa.gg - Connecté. Compétitif. Collectif.', iconURL: 'https://i.imgur.com/9FLBUiC.png' })
+        .setFooter({
+          text: 'Auusa.gg - Connecté. Compétitif. Collectif.',
+          iconURL: 'https://i.imgur.com/9FLBUiC.png'
+        })
         .setTimestamp();
 
       await interaction.reply({ embeds: [embed] });
     } catch (err) {
       console.error(err);
-      await interaction.reply({ content: `Erreur : ${err.message}`, flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        content: `Erreur : ${err.message}`,
+        flags: MessageFlags.Ephemeral
+      });
     }
   });
 }
