@@ -20,6 +20,7 @@ import { setupTeam } from './team.js';
 import { setupRegistration } from './registration.js';
 import express from 'express';
 import bodyParser from 'body-parser';
+import Joi from 'joi';
 import { setupAdvancedMatchmaking, handleMatchResult } from "./advancedMatchmaking.js";
 
 const app = express();
@@ -47,6 +48,44 @@ const client = new Client({
 });
 const matchData = new Map();
 const recentMatches = new Set();
+
+const sanitizeString = str =>
+  String(str || '').replace(/[^\w\sÀ-ÿ.'-]/g, '');
+
+const matchSchema = Joi.object({
+  scoreBlue: Joi.number().required(),
+  scoreOrange: Joi.number().required(),
+  teamBlue: Joi.string().default('Bleu'),
+  teamOrange: Joi.string().default('Orange'),
+  scorers: Joi.array().items(Joi.string().allow('')).default([]),
+  mvp: Joi.string().allow('').default(''),
+  players: Joi.array()
+    .items(
+      Joi.object({
+        name: Joi.string().required(),
+        team: Joi.number().required()
+      })
+    )
+    .min(1)
+    .required(),
+  duration: Joi.string().default('5:00'),
+  map: Joi.string().allow('').default('')
+});
+
+function sanitizePayload(payload) {
+  return {
+    ...payload,
+    teamBlue: sanitizeString(payload.teamBlue),
+    teamOrange: sanitizeString(payload.teamOrange),
+    mvp: sanitizeString(payload.mvp),
+    map: sanitizeString(payload.map),
+    scorers: payload.scorers.map(sanitizeString),
+    players: payload.players.map(p => ({
+      ...p,
+      name: sanitizeString(p.name)
+    }))
+  };
+}
 
 const mapIdMap = {
   cs_p: 'Champions Field',
@@ -242,7 +281,16 @@ async function runChannelSetup(interaction) {
 }
 
 app.post('/match', async (req, res) => {
-  const signature = getMatchSignature(req.body);
+  const { error, value } = matchSchema.validate(req.body, {
+    abortEarly: false
+  });
+  if (error) {
+    return res.status(400).json({
+      error: error.details.map(d => d.message)
+    });
+  }
+  const payload = sanitizePayload(value);
+  const signature = getMatchSignature(payload);
   if (recentMatches.has(signature)) {
     return res.sendStatus(200);
   }
@@ -252,14 +300,14 @@ app.post('/match', async (req, res) => {
   const {
     scoreBlue,
     scoreOrange,
-    teamBlue = 'Bleu',
-    teamOrange = 'Orange',
-    scorers = [],
-    mvp = '',
-    players: rawPlayers = [],
-    duration = '5:00',
-    map: rawMap = ''
-  } = req.body;
+    teamBlue,
+    teamOrange,
+    scorers,
+    mvp,
+    players: rawPlayers,
+    duration,
+    map: rawMap
+  } = payload;
   const map = translateMap(rawMap);
   const players = rawPlayers.map(p => ({
     ...p,
@@ -389,7 +437,7 @@ app.post('/match', async (req, res) => {
 
     const message = await channel.send({ embeds: [embed], components: rows });
     matchData.set(message.id, players);
-    await handleMatchResult(req.body, client);
+    await handleMatchResult(payload, client);
   }
   res.sendStatus(200);
 });
