@@ -308,17 +308,18 @@ app.post('/match', async (req, res) => {
   if (!API_SECRET) {
     return res.sendStatus(401);
   }
-  const received = req.get('x-signature') || '';
-  const expected = crypto
+  const headerSignature = req.get('x-signature') || '';
+  const rawBody = req.rawBody || '';
+  const expectedSignature = crypto
     .createHmac('sha256', API_SECRET)
-    .update(req.rawBody || '')
+    .update(rawBody)
     .digest('hex');
   if (
-    !received ||
-    received.length !== expected.length ||
+    !headerSignature ||
+    headerSignature.length !== expectedSignature.length ||
     !crypto.timingSafeEqual(
-      Buffer.from(received, 'utf8'),
-      Buffer.from(expected, 'utf8')
+      Buffer.from(headerSignature, 'utf8'),
+      Buffer.from(expectedSignature, 'utf8')
     )
   ) {
     return res.sendStatus(401);
