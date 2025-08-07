@@ -24,7 +24,8 @@ Les variables nécessaires sont :
 - `DISCORD_TOKEN` : token de votre bot Discord
 - `SUPABASE_URL` : URL de l'instance Supabase
 - `SUPABASE_KEY` : clé de service pour effectuer les requêtes REST
-- `API_SECRET` : clé partagée avec le plugin pour sécuriser l'endpoint `/match`
+- `API_SECRET` : secret partagé utilisé pour générer la signature HMAC-SHA256
+  envoyée dans l'en-tête `X-Signature`
 
 ```bash
 node index.js

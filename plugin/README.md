@@ -27,6 +27,9 @@ Il doit contenir les champs suivants :
 Lors du chargement, le plugin lit ce fichier et utilise les valeurs pour contacter Supabase
 et déterminer l'URL d'envoi des résultats au bot Discord.
 
+`API_SECRET` sert à signer le corps de chaque requête avec HMAC-SHA256.
+La signature est envoyée via l'en-tête `X-Signature` pour authentifier l'appel.
+
 Le cvar `mm_player_id` est automatiquement défini sur le pseudo en jeu du joueur.
 
 
