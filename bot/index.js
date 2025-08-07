@@ -785,18 +785,24 @@ client.on('interactionCreate', async interaction => {
 });
 
 const PORT = process.env.PORT || 3000;
-const { SSL_KEY_PATH, SSL_CERT_PATH } = process.env;
-if (SSL_KEY_PATH && SSL_CERT_PATH) {
-  const key = fs.readFileSync(SSL_KEY_PATH);
-  const cert = fs.readFileSync(SSL_CERT_PATH);
-  https.createServer({ key, cert }, app).listen(PORT, () =>
-    console.log(`API HTTPS en écoute sur le port ${PORT}`)
+if (process.env.NODE_ENV !== 'test') {
+  const { SSL_KEY_PATH, SSL_CERT_PATH } = process.env;
+  if (SSL_KEY_PATH && SSL_CERT_PATH) {
+    const key = fs.readFileSync(SSL_KEY_PATH);
+    const cert = fs.readFileSync(SSL_CERT_PATH);
+    https.createServer({ key, cert }, app).listen(PORT, () =>
+      console.log(`API HTTPS en écoute sur le port ${PORT}`)
+    );
+  } else {
+    app.listen(PORT, () => console.log(`API HTTP en écoute sur le port ${PORT}`));
+  }
+
+  client.on('error', console.error);
+  process.on('unhandledRejection', err =>
+    console.error('Unhandled promise rejection:', err)
   );
-} else {
-  app.listen(PORT, () => console.log(`API HTTP en écoute sur le port ${PORT}`));
+
+  client.login(process.env.DISCORD_TOKEN);
 }
 
-client.on('error', console.error);
-process.on('unhandledRejection', err => console.error('Unhandled promise rejection:', err));
-
-client.login(process.env.DISCORD_TOKEN);
+export default app;
