@@ -1,3 +1,5 @@
 bot/.env
+bot/channel.json
+bot/verify.json
 
 plugin/config.json
