@@ -15,8 +15,8 @@
 #include <thread>
 #include <memory>
 #include <exception>
-#include <openssl/hmac.h>
-#include <openssl/evp.h>
+#include <windows.h>
+#include <bcrypt.h>
 #include <iomanip>
 #include <sstream>
 #include <cstdlib>
@@ -28,13 +28,50 @@ using json = nlohmann::json;
 
 static std::string hmac_sha256(const std::string& key, const std::string& data)
 {
-    unsigned int len = EVP_MAX_MD_SIZE;
-    unsigned char hash[EVP_MAX_MD_SIZE];
-    HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()),
-         reinterpret_cast<const unsigned char*>(data.data()), data.size(), hash, &len);
+    BCRYPT_ALG_HANDLE hAlg = nullptr;
+    BCRYPT_HASH_HANDLE hHash = nullptr;
+    DWORD objLen = 0, dataLen = 0;
+    std::vector<BYTE> obj; // buffer pour l'objet de hachage
+    BYTE hash[32];
+
+    NTSTATUS status = BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_SHA256_ALGORITHM, nullptr,
+                                                   BCRYPT_ALG_HANDLE_HMAC_FLAG);
+    if (!BCRYPT_SUCCESS(status))
+        throw std::runtime_error("BCryptOpenAlgorithmProvider failed");
+
+    status = BCryptGetProperty(hAlg, BCRYPT_OBJECT_LENGTH,
+                               reinterpret_cast<PBYTE>(&objLen), sizeof(DWORD), &dataLen, 0);
+    if (!BCRYPT_SUCCESS(status)) {
+        BCryptCloseAlgorithmProvider(hAlg, 0);
+        throw std::runtime_error("BCryptGetProperty failed");
+    }
+
+    obj.resize(objLen);
+    status = BCryptCreateHash(hAlg, &hHash, obj.data(), objLen,
+                              reinterpret_cast<PBYTE>(const_cast<char*>(key.data())),
+                              static_cast<ULONG>(key.size()), 0);
+    if (!BCRYPT_SUCCESS(status)) {
+        BCryptCloseAlgorithmProvider(hAlg, 0);
+        throw std::runtime_error("BCryptCreateHash failed");
+    }
+
+    status = BCryptHashData(hHash, reinterpret_cast<PBYTE>(const_cast<char*>(data.data())),
+                            static_cast<ULONG>(data.size()), 0);
+    if (!BCRYPT_SUCCESS(status)) {
+        BCryptDestroyHash(hHash);
+        BCryptCloseAlgorithmProvider(hAlg, 0);
+        throw std::runtime_error("BCryptHashData failed");
+    }
+
+    status = BCryptFinishHash(hHash, hash, sizeof(hash), 0);
+    BCryptDestroyHash(hHash);
+    BCryptCloseAlgorithmProvider(hAlg, 0);
+    if (!BCRYPT_SUCCESS(status))
+        throw std::runtime_error("BCryptFinishHash failed");
+
     std::ostringstream oss;
-    for (unsigned int i = 0; i < len; ++i)
-        oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
+    for (BYTE b : hash)
+        oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
     return oss.str();
 }
 
