@@ -26,6 +26,17 @@ Les variables nécessaires sont :
 - `SUPABASE_KEY` : clé de service pour effectuer les requêtes REST
 - `API_SECRET` : secret partagé utilisé pour générer la signature HMAC-SHA256
   envoyée dans l'en-tête `X-Signature`
+- `CORS_ORIGIN` : liste d’origines autorisées pour les requêtes HTTP, séparées par des virgules
+
+### Exemple de fichier `.env`
+
+```env
+DISCORD_TOKEN=votre_token
+SUPABASE_URL=https://votre-projet.supabase.co
+SUPABASE_KEY=votre_cle
+API_SECRET=votre_secret
+CORS_ORIGIN=https://exemple.com
+```
 
 ```bash
 node index.js
