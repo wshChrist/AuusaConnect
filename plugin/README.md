@@ -21,8 +21,8 @@ Exemple de contenu :
 
 ```json
 {
-  "BOT_ENDPOINT": "https://localhost:3000/match",
-  "API_SECRET": "TON_API_SECRET"
+  "BOT_ENDPOINT": "https://api.auusa.fr/match",
+  "API_SECRET": "..."
 }
 ```
 
@@ -48,7 +48,7 @@ Le plugin récupère les sessions de match via un serveur proxy sécurisé
 (`https://api.auusa.fr/player?player_id=wChrist`) qui renvoie uniquement
 `rl_name`, `rl_password` et `queue_type`, puis envoie les informations de fin de match au bot
 Discord via une requête HTTP POST vers l'URL définie par `BOT_ENDPOINT`
-(par défaut `https://localhost:3000/match`).
+(par défaut `https://api.auusa.fr/match`).
 Il transmet notamment :
 
 - le score global des équipes ;

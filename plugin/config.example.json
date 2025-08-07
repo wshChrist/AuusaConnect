@@ -1,4 +1,4 @@
 {
-  "BOT_ENDPOINT": "https://localhost:3000/match",
-  "API_SECRET": "VOTRE_API_SECRET"
+  "BOT_ENDPOINT": "https://api.auusa.fr/match",
+  "API_SECRET": "..."
 }

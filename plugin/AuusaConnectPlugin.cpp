@@ -335,12 +335,18 @@ void AuusaConnectPlugin::LoadConfig()
             {
                 if (botEndpoint.empty()) botEndpoint = cfg.value("BOT_ENDPOINT", "");
                 if (apiSecret.empty()) apiSecret = cfg.value("API_SECRET", "");
+
+                for (auto& [key, val] : cfg.items())
+                {
+                    if (key.rfind("SUPABASE_", 0) == 0)
+                        Log("[Config] Champ " + key + " obsolète ignoré");
+                }
             }
         }
     }
 
     if (botEndpoint.empty())
-        botEndpoint = "https://localhost:3000/match";
+        botEndpoint = "https://api.auusa.fr/match";
     if (botEndpoint.rfind("https://", 0) != 0)
         Log("[Config] BOT_ENDPOINT doit utiliser HTTPS");
 
