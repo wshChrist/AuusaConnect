@@ -9,6 +9,14 @@ Ce dépôt contient un exemple minimal permettant de relier Rocket League (via u
 
 Chaque dossier possède un `README.md` détaillant la mise en place.
 
+## Configuration sécurisée
+
+Le plugin lit les secrets (`SUPABASE_URL`, `SUPABASE_API_KEY`, `SUPABASE_JWT`,
+`BOT_ENDPOINT`) depuis des variables d'environnement ou un fichier local
+`config.json` (ignoré par Git). Un modèle `config.example.json` est disponible
+dans `plugin/`. Copiez-le puis renseignez vos valeurs ou exportez les variables
+correspondantes.
+
 ## Base de données Supabase
 
 Les tables suivantes doivent être créées dans votre projet Supabase :

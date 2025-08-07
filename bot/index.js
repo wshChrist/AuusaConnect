@@ -24,6 +24,21 @@ import Joi from 'joi';
 import { setupAdvancedMatchmaking, handleMatchResult } from "./advancedMatchmaking.js";
 
 const app = express();
+app.use(helmet());
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use(limiter);
+
+const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : [];
+if (allowedOrigins.length > 0) {
+  app.use(cors({ origin: allowedOrigins }));
+}
+
 app.use(bodyParser.json());
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

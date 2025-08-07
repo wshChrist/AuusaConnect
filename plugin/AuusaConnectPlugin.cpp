@@ -16,6 +16,7 @@
 #include <memory>
 #include <exception>
 #include <ctime>
+#include <cstdlib>
 
 #undef min
 #undef max
@@ -169,7 +170,7 @@ private:
     std::string lastSupabaseName;
     std::string lastSupabasePassword;
     bool supabaseDisabled = false;
-    std::string botEndpoint = "http://localhost:3000/match";
+    std::string botEndpoint = "https://localhost:3000/match";
     bool creatingMatch = false;
     bool autoJoined = false;
 };
@@ -339,32 +340,50 @@ void AuusaConnectPlugin::onUnload()
 
 void AuusaConnectPlugin::LoadConfig()
 {
+    auto getEnv = [](const char* key) -> std::string {
+        const char* val = std::getenv(key);
+        return val ? std::string(val) : std::string();
+    };
+
+    supabaseUrl = getEnv("SUPABASE_URL");
+    supabaseApiKey = getEnv("SUPABASE_API_KEY");
+    supabaseJwt = getEnv("SUPABASE_JWT");
+    botEndpoint = getEnv("BOT_ENDPOINT");
+
     std::filesystem::path path = gameWrapper->GetDataFolder() / "config.json";
-    std::ifstream file(path);
-    if (!file.is_open())
+    if (supabaseUrl.empty() || supabaseApiKey.empty() || supabaseJwt.empty() || botEndpoint.empty())
     {
-        Log("[Config] Impossible de lire " + path.string());
-        supabaseUrl.clear();
-        supabaseApiKey.clear();
-        supabaseJwt.clear();
-        jwtExpiry = 0;
-        return;
+        std::ifstream file(path);
+        if (!file.is_open())
+        {
+            Log("[Config] Impossible de lire " + path.string());
+        }
+        else
+        {
+            json cfg = json::parse(file, nullptr, false);
+            if (cfg.is_discarded())
+            {
+                Log("[Config] JSON invalide dans " + path.string());
+            }
+            else
+            {
+                if (supabaseUrl.empty()) supabaseUrl = cfg.value("SUPABASE_URL", "");
+                if (supabaseApiKey.empty()) supabaseApiKey = cfg.value("SUPABASE_API_KEY", "");
+                if (supabaseJwt.empty()) supabaseJwt = cfg.value("SUPABASE_JWT", "");
+                if (botEndpoint.empty()) botEndpoint = cfg.value("BOT_ENDPOINT", "");
+            }
+        }
     }
 
-    json cfg = json::parse(file, nullptr, false);
-    if (cfg.is_discarded())
-    {
-        Log("[Config] JSON invalide dans " + path.string());
-        return;
-    }
-
-    supabaseUrl = cfg.value("SUPABASE_URL", "");
-    supabaseApiKey = cfg.value("SUPABASE_API_KEY", "");
-    supabaseJwt = cfg.value("SUPABASE_JWT", "");
     jwtExpiry = ParseJwtExpiry(supabaseJwt);
     if (jwtExpiry == 0)
         Log("[Config] Date d'expiration du JWT introuvable");
-    botEndpoint = cfg.value("BOT_ENDPOINT", "http://localhost:3000/match");
+
+    if (botEndpoint.empty())
+        botEndpoint = "https://localhost:3000/match";
+    if (botEndpoint.rfind("https://", 0) != 0)
+        Log("[Config] BOT_ENDPOINT doit utiliser HTTPS");
+
     Log("[Config] BOT_ENDPOINT=" + botEndpoint);
 }
 
@@ -426,7 +445,11 @@ void AuusaConnectPlugin::PollSupabase()
         try
         {
             auto headers = cpr::Header{{"Authorization", "Bearer " + supabaseJwt}, {"apikey", supabaseApiKey}};
-            cpr::Response r = cpr::Get(cpr::Url{supabaseUrl}, cpr::Parameters{{"player_id", "eq." + playerId}}, headers);
+            cpr::Response r = cpr::Get(
+                cpr::Url{supabaseUrl},
+                cpr::Parameters{{"player_id", "eq." + playerId}},
+                headers,
+                cpr::VerifySsl{true});
             if (r.status_code != 200)
             {
                 Log("[Supabase] Erreur HTTP " + std::to_string(r.status_code) + ": " + r.text);
@@ -439,9 +462,21 @@ void AuusaConnectPlugin::PollSupabase()
                 return;
             }
             auto instr = arr.at(0);
-            std::string name = instr.value("rl_name", "");
-            std::string password = instr.value("rl_password", "");
-            std::string queueType = instr.value("queue_type", "");
+            std::string name;
+            if (instr.contains("rl_name") && instr["rl_name"].is_string())
+                name = instr["rl_name"].get<std::string>();
+            else
+                name = "";
+            std::string password;
+            if (instr.contains("rl_password") && instr["rl_password"].is_string())
+                password = instr["rl_password"].get<std::string>();
+            else
+                password = "";
+            std::string queueType;
+            if (instr.contains("queue_type") && instr["queue_type"].is_string())
+                queueType = instr["queue_type"].get<std::string>();
+            else
+                queueType = "";
             if (name.empty())
             {
                 Log("[Supabase] Champ rl_name absent, aucune action");
@@ -783,7 +818,8 @@ void AuusaConnectPlugin::OnGameEnd()
                     cpr::Url{supabaseUrl},
                     cpr::Parameters{{"player_id", "eq." + playerId}},
                     cpr::Body{"{\"rl_name\":\"\",\"rl_password\":\"\",\"queue_type\":null}"},
-                    headers);
+                    headers,
+                    cpr::VerifySsl{true});
                 if (res.status_code >= 400)
                     Log("[Supabase] Nettoyage echoue : HTTP " + std::to_string(res.status_code) + " - " + res.text);
             }
@@ -906,7 +942,8 @@ void AuusaConnectPlugin::OnGameEnd()
             {
                 auto res = cpr::Post(cpr::Url{url},
                                      cpr::Body{p.dump()},
-                                     cpr::Header{{"Content-Type", "application/json"}});
+                                     cpr::Header{{"Content-Type", "application/json"}},
+                                     cpr::VerifySsl{true});
 
                 if (res.error.code != cpr::ErrorCode::OK)
                     Log(std::string("[Stats] Erreur reseau : ") + res.error.message);
