@@ -16,6 +16,18 @@ ou un fichier local `config.json` (ignoré par Git). Un modèle `config.example.
 disponible dans `plugin/`. Copiez-le puis renseignez vos valeurs ou exportez les variables
 correspondantes.
 
+Pour le développement local, générez un certificat auto-signé puis lancez le bot en HTTPS :
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 365
+SSL_KEY_PATH=./key.pem SSL_CERT_PATH=./cert.pem node bot/index.js
+```
+
+Dans ce cas, configurez le plugin avec `BOT_ENDPOINT=https://localhost:3000/match`.
+En production, utilisez un certificat Let's Encrypt ou un reverse proxy (Nginx, Caddy)
+et adaptez `BOT_ENDPOINT` vers l'URL publique, par exemple
+`https://api.exemple.fr/match`.
+
 ## Base de données Supabase
 
 Les tables suivantes doivent être créées dans votre projet Supabase :

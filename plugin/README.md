@@ -27,6 +27,9 @@ Exemple de contenu :
 ```
 
 `BOT_ENDPOINT` doit obligatoirement utiliser `https://`.
+En développement, pointez vers `https://localhost:3000/match` avec le certificat auto-signé
+du bot. En production, renseignez l'URL publique de votre API sécurisée (Let's Encrypt ou
+reverse proxy).
 Lors du chargement, le plugin lit d'abord les variables d'environnement puis, si nécessaire,
 le fichier pour déterminer l'URL d'envoi des résultats au bot Discord.
 

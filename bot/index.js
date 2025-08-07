@@ -17,6 +17,7 @@ import { fileURLToPath } from 'url';
 import express from 'express';
 import bodyParser from 'body-parser';
 import crypto from 'crypto';
+import https from 'https';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cors from 'cors';
@@ -784,7 +785,16 @@ client.on('interactionCreate', async interaction => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`API en écoute sur le port ${PORT}`));
+const { SSL_KEY_PATH, SSL_CERT_PATH } = process.env;
+if (SSL_KEY_PATH && SSL_CERT_PATH) {
+  const key = fs.readFileSync(SSL_KEY_PATH);
+  const cert = fs.readFileSync(SSL_CERT_PATH);
+  https.createServer({ key, cert }, app).listen(PORT, () =>
+    console.log(`API HTTPS en écoute sur le port ${PORT}`)
+  );
+} else {
+  app.listen(PORT, () => console.log(`API HTTP en écoute sur le port ${PORT}`));
+}
 
 client.on('error', console.error);
 process.on('unhandledRejection', err => console.error('Unhandled promise rejection:', err));
