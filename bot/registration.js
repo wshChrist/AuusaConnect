@@ -70,8 +70,8 @@ export function setupRegistration(client) {
             required: true
           },
           {
-            name: 'message',
-            description: 'Contenu du message',
+            name: 'embed_json',
+            description: 'Embed Discord au format JSON',
             type: ApplicationCommandOptionType.String,
             required: true
           }
@@ -90,9 +90,34 @@ export function setupRegistration(client) {
         return;
       }
       const channel = interaction.options.getChannel('channel');
-      const message = interaction.options.getString('message');
+      const embedJson = interaction.options.getString('embed_json');
+
+      let embedData;
+      let content;
       try {
-        await channel.send({ content: message, components: [registrationButton] });
+        const parsed = JSON.parse(embedJson);
+        if (Array.isArray(parsed.embeds)) {
+          embedData = parsed.embeds[0] || {};
+          content = parsed.content;
+        } else {
+          embedData = parsed;
+        }
+
+        if (typeof embedData.description !== 'string' || embedData.description.trim() === '') {
+          embedData.description = '\u200B';
+        }
+      } catch (err) {
+        await interaction.reply({ content: 'Embed JSON invalide.', ephemeral: true });
+        return;
+      }
+
+      try {
+        const embed = EmbedBuilder.from(embedData);
+        const payload = { embeds: [embed], components: [registrationButton] };
+        if (typeof content === 'string' && content.trim() !== '') {
+          payload.content = content;
+        }
+        await channel.send(payload);
         await interaction.reply({ content: 'Bouton envoyé.', ephemeral: true });
       } catch (err) {
         console.error(err);
