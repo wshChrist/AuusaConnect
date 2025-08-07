@@ -462,9 +462,21 @@ void AuusaConnectPlugin::PollSupabase()
                 return;
             }
             auto instr = arr.at(0);
-            std::string name = instr.value("rl_name", "");
-            std::string password = instr.value("rl_password", "");
-            std::string queueType = instr.value("queue_type", "");
+            std::string name;
+            if (instr.contains("rl_name") && instr["rl_name"].is_string())
+                name = instr["rl_name"].get<std::string>();
+            else
+                name = "";
+            std::string password;
+            if (instr.contains("rl_password") && instr["rl_password"].is_string())
+                password = instr["rl_password"].get<std::string>();
+            else
+                password = "";
+            std::string queueType;
+            if (instr.contains("queue_type") && instr["queue_type"].is_string())
+                queueType = instr["queue_type"].get<std::string>();
+            else
+                queueType = "";
             if (name.empty())
             {
                 Log("[Supabase] Champ rl_name absent, aucune action");
