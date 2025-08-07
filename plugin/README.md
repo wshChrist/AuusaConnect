@@ -19,7 +19,8 @@ Il doit contenir les champs suivants :
   "SUPABASE_URL": "https://TON_PROJECT.supabase.co/rest/v1/match_sessions",
   "SUPABASE_API_KEY": "TON_API_KEY",
   "SUPABASE_JWT": "TON_JWT",
-  "BOT_ENDPOINT": "http://localhost:3000/match"
+  "BOT_ENDPOINT": "http://localhost:3000/match",
+  "API_SECRET": "VOTRE_SECRET"
 }
 ```
 

@@ -25,6 +25,8 @@ import { setupAdvancedMatchmaking, handleMatchResult } from "./advancedMatchmaki
 const app = express();
 app.use(bodyParser.json());
 
+const API_SECRET = process.env.API_SECRET;
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CHANNEL_FILE = path.join(__dirname, 'channel.json');
 let channelId = '';
@@ -242,6 +244,10 @@ async function runChannelSetup(interaction) {
 }
 
 app.post('/match', async (req, res) => {
+  const apiKey = req.get('x-api-key');
+  if (!API_SECRET || apiKey !== API_SECRET) {
+    return res.sendStatus(401);
+  }
   const signature = getMatchSignature(req.body);
   if (recentMatches.has(signature)) {
     return res.sendStatus(200);

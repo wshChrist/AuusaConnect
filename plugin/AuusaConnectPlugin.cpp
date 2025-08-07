@@ -170,6 +170,7 @@ private:
     std::string lastSupabasePassword;
     bool supabaseDisabled = false;
     std::string botEndpoint = "http://localhost:3000/match";
+    std::string apiSecret;
     bool creatingMatch = false;
     bool autoJoined = false;
 };
@@ -366,6 +367,7 @@ void AuusaConnectPlugin::LoadConfig()
         Log("[Config] Date d'expiration du JWT introuvable");
     botEndpoint = cfg.value("BOT_ENDPOINT", "http://localhost:3000/match");
     Log("[Config] BOT_ENDPOINT=" + botEndpoint);
+    apiSecret = cfg.value("API_SECRET", "");
 }
 
 void AuusaConnectPlugin::PollSupabase()
@@ -904,9 +906,12 @@ void AuusaConnectPlugin::OnGameEnd()
         {
             try
             {
+                cpr::Header headers{{"Content-Type", "application/json"}};
+                if (!apiSecret.empty())
+                    headers.emplace("X-API-KEY", apiSecret);
                 auto res = cpr::Post(cpr::Url{url},
                                      cpr::Body{p.dump()},
-                                     cpr::Header{{"Content-Type", "application/json"}});
+                                     headers);
 
                 if (res.error.code != cpr::ErrorCode::OK)
                     Log(std::string("[Stats] Erreur reseau : ") + res.error.message);
