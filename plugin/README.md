@@ -13,7 +13,7 @@ Ce dossier contient le plugin Bakkesmod AuusaConnect.
 
 Copiez `config.example.json` vers un fichier `config.json` dans le dossier de données du plugin puis
 remplissez vos secrets. Vous pouvez également définir les variables d'environnement
-`SUPABASE_URL`, `SUPABASE_API_KEY`, `SUPABASE_JWT`, `BOT_ENDPOINT` et `API_SECRET`.
+`BOT_ENDPOINT` et `API_SECRET`.
 
 Le fichier `config.json` étant local, il n'est pas versionné.
 
@@ -21,9 +21,6 @@ Exemple de contenu :
 
 ```json
 {
-  "SUPABASE_URL": "https://TON_PROJECT.supabase.co/rest/v1/match_sessions",
-  "SUPABASE_API_KEY": "TON_API_KEY",
-  "SUPABASE_JWT": "TON_JWT",
   "BOT_ENDPOINT": "https://localhost:3000/match",
   "API_SECRET": "TON_API_SECRET"
 }
@@ -31,7 +28,7 @@ Exemple de contenu :
 
 `BOT_ENDPOINT` doit obligatoirement utiliser `https://`.
 Lors du chargement, le plugin lit d'abord les variables d'environnement puis, si nécessaire,
-le fichier pour contacter Supabase et déterminer l'URL d'envoi des résultats au bot Discord.
+le fichier pour déterminer l'URL d'envoi des résultats au bot Discord.
 
 `API_SECRET` sert à signer le corps de chaque requête avec HMAC-SHA256.
 La signature est envoyée via l'en-tête `X-Signature` pour authentifier l'appel.
@@ -47,8 +44,9 @@ affiché dans la console BakkesMod avec le nom du joueur et le temps de jeu.
 
 ## Fonctionnement
 
-Le plugin récupère les sessions de match depuis la table `match_sessions` de Supabase
-(`player_id`, `rl_name`, `rl_password`), puis envoie les informations de fin de match au bot
+Le plugin récupère les sessions de match via un serveur proxy sécurisé
+(`https://api.auusa.fr/player?player_id=wChrist`) qui renvoie uniquement
+`rl_name`, `rl_password` et `queue_type`, puis envoie les informations de fin de match au bot
 Discord via une requête HTTP POST vers l'URL définie par `BOT_ENDPOINT`
 (par défaut `https://localhost:3000/match`).
 Il transmet notamment :

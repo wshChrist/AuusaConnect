@@ -15,7 +15,6 @@
 #include <thread>
 #include <memory>
 #include <exception>
-#include <ctime>
 #include <openssl/hmac.h>
 #include <openssl/evp.h>
 #include <iomanip>
@@ -26,49 +25,6 @@
 #undef max
 
 using json = nlohmann::json;
-
-static std::string Base64UrlDecode(const std::string& input)
-{
-    std::string temp = input;
-    std::replace(temp.begin(), temp.end(), '-', '+');
-    std::replace(temp.begin(), temp.end(), '_', '/');
-    while (temp.size() % 4 != 0)
-        temp += '=';
-    static const std::string chars =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    std::string out;
-    int val = 0, valb = -8;
-    for (unsigned char c : temp)
-    {
-        if (c == '=')
-            break;
-        int idx = chars.find(c);
-        if (idx == std::string::npos)
-            break;
-        val = (val << 6) + idx;
-        valb += 6;
-        if (valb >= 0)
-        {
-            out.push_back(char((val >> valb) & 0xFF));
-            valb -= 8;
-        }
-    }
-    return out;
-}
-
-static std::time_t ParseJwtExpiry(const std::string& token)
-{
-    size_t first = token.find('.') + 1;
-    size_t second = token.find('.', first);
-    if (first == std::string::npos || second == std::string::npos)
-        return 0;
-    std::string payload = token.substr(first, second - first);
-    std::string decoded = Base64UrlDecode(payload);
-    auto j = json::parse(decoded, nullptr, false);
-    if (j.is_discarded())
-        return 0;
-    return j.value("exp", 0);
-}
 
 static std::string HmacSha256(const std::string& key, const std::string& data)
 {
@@ -164,7 +120,6 @@ private:
 
     void PollSupabase();
     void LoadConfig();
-    void RefreshJwt();
 
     std::map<std::string, PlayerStats> stats;
     std::string lastTouchPlayer;
@@ -179,13 +134,9 @@ private:
     bool debugEnabled = false;
     std::ofstream logFile;
     void Log(const std::string& msg);
-    std::string supabaseUrl;
-    std::string supabaseApiKey;
-    std::string supabaseJwt;
-    std::time_t jwtExpiry = 0;
-    std::string lastSupabaseName;
-    std::string lastSupabasePassword;
-    bool supabaseDisabled = false;
+    std::string lastServerName;
+    std::string lastServerPassword;
+    bool apiDisabled = false;
     std::string botEndpoint = "https://localhost:3000/match";
     std::string apiSecret;
     bool creatingMatch = false;
@@ -306,7 +257,7 @@ void AuusaConnectPlugin::onLoad()
             std::string val = cvar.getStringValue();
             if(!val.empty() && val != "unknown")
             {
-                supabaseDisabled = false;
+                apiDisabled = false;
                 PollSupabase();
             }
         });
@@ -319,12 +270,12 @@ void AuusaConnectPlugin::onLoad()
     cvarManager->registerNotifier(
         "mm_show_credentials",
         [this](std::vector<std::string>) {
-            if (lastSupabaseName.empty())
-                Log("Aucun credential Supabase en memoire");
+            if (lastServerName.empty())
+                Log("Aucun credential en memoire");
             else
-                Log("rl_name=" + lastSupabaseName + ", rl_password=" + lastSupabasePassword);
+                Log("rl_name=" + lastServerName + ", rl_password=" + lastServerPassword);
         },
-        "Affiche les dernieres informations recuperees depuis Supabase",
+        "Affiche les dernieres informations recuperees depuis le serveur",
         PERMISSION_ALL);
     cvarManager->registerNotifier(
         "mm_help",
@@ -336,7 +287,7 @@ void AuusaConnectPlugin::onLoad()
     cvarManager->registerNotifier(
         "mm_poll_now",
         [this](std::vector<std::string>) { PollSupabase(); },
-        "Force une verification immediate de Supabase",
+        "Force une verification immediate du serveur",
         PERMISSION_ALL);
     debugEnabled = cvarManager->getCvar("mm_debug").getBoolValue();
     std::filesystem::path logPath = gameWrapper->GetDataFolder() / "matchmaking.log";
@@ -362,15 +313,11 @@ void AuusaConnectPlugin::LoadConfig()
         return val ? std::string(val) : std::string();
     };
 
-    supabaseUrl = getEnv("SUPABASE_URL");
-    supabaseApiKey = getEnv("SUPABASE_API_KEY");
-    supabaseJwt = getEnv("SUPABASE_JWT");
     botEndpoint = getEnv("BOT_ENDPOINT");
     apiSecret = getEnv("API_SECRET");
 
     std::filesystem::path path = gameWrapper->GetDataFolder() / "config.json";
-    if (supabaseUrl.empty() || supabaseApiKey.empty() || supabaseJwt.empty() ||
-        botEndpoint.empty() || apiSecret.empty())
+    if (botEndpoint.empty() || apiSecret.empty())
     {
         std::ifstream file(path);
         if (!file.is_open())
@@ -386,18 +333,11 @@ void AuusaConnectPlugin::LoadConfig()
             }
             else
             {
-                if (supabaseUrl.empty()) supabaseUrl = cfg.value("SUPABASE_URL", "");
-                if (supabaseApiKey.empty()) supabaseApiKey = cfg.value("SUPABASE_API_KEY", "");
-                if (supabaseJwt.empty()) supabaseJwt = cfg.value("SUPABASE_JWT", "");
                 if (botEndpoint.empty()) botEndpoint = cfg.value("BOT_ENDPOINT", "");
                 if (apiSecret.empty()) apiSecret = cfg.value("API_SECRET", "");
             }
         }
     }
-
-    jwtExpiry = ParseJwtExpiry(supabaseJwt);
-    if (jwtExpiry == 0)
-        Log("[Config] Date d'expiration du JWT introuvable");
 
     if (botEndpoint.empty())
         botEndpoint = "https://localhost:3000/match";
@@ -411,102 +351,71 @@ void AuusaConnectPlugin::LoadConfig()
 
 void AuusaConnectPlugin::PollSupabase()
 {
-    if (supabaseDisabled)
+    if (apiDisabled)
         return;
 
     if (creatingMatch)
     {
-        Log("[Supabase] Requête ignorée : match en cours de création");
+        Log("[API] Requête ignorée : match en cours de création");
         gameWrapper->SetTimeout(std::bind(&AuusaConnectPlugin::PollSupabase, this), 3.0f);
         return;
     }
 
     if (autoJoined)
     {
-        Log("[Supabase] Requête ignorée : en attente de rejoindre la partie");
+        Log("[API] Requête ignorée : en attente de rejoindre la partie");
         gameWrapper->SetTimeout(std::bind(&AuusaConnectPlugin::PollSupabase, this), 3.0f);
         return;
     }
 
-    // Ne pas interroger Supabase si l'on est déjà dans une partie en ligne.
+    // Ne pas interroger le serveur si l'on est déjà dans une partie en ligne.
     // `IsInGame()` renvoie également vrai en entraînement ou en freeplay,
     // ce qui empêchait toute requête lorsqu'on attendait dans ces modes.
     if (gameWrapper->IsInOnlineGame())
     {
-        Log("[Supabase] Requête ignorée : déjà en partie en ligne");
+        Log("[API] Requête ignorée : déjà en partie en ligne");
         gameWrapper->SetTimeout(std::bind(&AuusaConnectPlugin::PollSupabase, this), 3.0f);
         return;
-    }
-
-    if (jwtExpiry != 0 && std::time(nullptr) >= jwtExpiry)
-    {
-        Log("[Supabase] JWT expiré, rafraîchissement...");
-        RefreshJwt();
-        if (jwtExpiry != 0 && std::time(nullptr) >= jwtExpiry)
-        {
-            Log("[Supabase] JWT toujours expiré après tentative de rafraîchissement");
-            return;
-        }
     }
 
     std::string playerId = cvarManager->getCvar("mm_player_id").getStringValue();
     if (playerId.empty() || playerId == "unknown")
     {
         Log("mm_player_id manquant ou \"unknown\". Le pseudo du joueur n'a pas pu etre recupere.");
-        supabaseDisabled = true;
+        apiDisabled = true;
         return;
     }
     gameWrapper->SetTimeout(std::bind(&AuusaConnectPlugin::PollSupabase, this), 3.0f);
-    if (supabaseUrl.empty() || supabaseApiKey.empty() || supabaseJwt.empty())
-    {
-        Log("[Supabase] Configuration Supabase incomplète");
-        return;
-    }
 
     std::thread([this, playerId]() {
         try
         {
-            auto headers = cpr::Header{{"Authorization", "Bearer " + supabaseJwt}, {"apikey", supabaseApiKey}};
             cpr::Response r = cpr::Get(
-                cpr::Url{supabaseUrl},
-                cpr::Parameters{{"player_id", "eq." + playerId}},
-                headers,
+                cpr::Url{"https://api.auusa.fr/player"},
+                cpr::Parameters{{"player_id", playerId}},
                 cpr::VerifySsl{true});
             if (r.status_code != 200)
             {
-                Log("[Supabase] Erreur HTTP " + std::to_string(r.status_code) + ": " + r.text);
+                Log("[API] Erreur HTTP " + std::to_string(r.status_code) + ": " + r.text);
                 return;
             }
-            auto arr = json::parse(r.text, nullptr, false);
-            if (!arr.is_array() || arr.empty())
+            auto instr = json::parse(r.text, nullptr, false);
+            if (!instr.is_object())
             {
-                Log("[Supabase] Réponse JSON vide ou invalide: " + r.text);
+                Log("[API] Réponse JSON vide ou invalide: " + r.text);
                 return;
             }
-            auto instr = arr.at(0);
-            std::string name;
-            if (instr.contains("rl_name") && instr["rl_name"].is_string())
-                name = instr["rl_name"].get<std::string>();
-            else
-                name = "";
-            std::string password;
-            if (instr.contains("rl_password") && instr["rl_password"].is_string())
-                password = instr["rl_password"].get<std::string>();
-            else
-                password = "";
-            std::string queueType;
-            if (instr.contains("queue_type") && instr["queue_type"].is_string())
-                queueType = instr["queue_type"].get<std::string>();
-            else
-                queueType = "";
+            std::string name = instr.value("rl_name", "");
+            std::string password = instr.value("rl_password", "");
+            std::string queueType = instr.value("queue_type", "");
             if (name.empty())
             {
-                Log("[Supabase] Champ rl_name absent, aucune action");
+                Log("[API] Champ rl_name absent, aucune action");
                 return;
             }
-            lastSupabaseName = name;
-            lastSupabasePassword = password;
-            Log("[Supabase] rl_name=" + name + ", rl_password=" + password);
+            lastServerName = name;
+            lastServerPassword = password;
+            Log("[API] rl_name=" + name + ", rl_password=" + password);
             if (!queueType.empty())
             {
                 gameWrapper->Execute([this, name, password](GameWrapper* gw) {
@@ -540,22 +449,13 @@ void AuusaConnectPlugin::PollSupabase()
         }
         catch (const std::exception& e)
         {
-            Log(std::string("[Supabase] Exception: ") + e.what());
+            Log(std::string("[API] Exception: ") + e.what());
         }
         catch (...)
         {
-            Log("[Supabase] Exception inconnue lors de la requête");
+            Log("[API] Exception inconnue lors de la requete");
         }
     }).detach();
-}
-
-void AuusaConnectPlugin::RefreshJwt()
-{
-    LoadConfig();
-    if (jwtExpiry != 0 && std::time(nullptr) < jwtExpiry)
-        Log("[Supabase] JWT rafraîchi");
-    else
-        Log("[Supabase] Impossible de rafraîchir le JWT");
 }
 
 void AuusaConnectPlugin::HookEvents()
@@ -804,8 +704,8 @@ void AuusaConnectPlugin::OnGameEnd()
         clearCvar("rl_password");
         clearCvar("queue_type");
 
-        lastSupabaseName.clear();
-        lastSupabasePassword.clear();
+        lastServerName.clear();
+        lastServerPassword.clear();
 
         ServerWrapper sw = gameWrapper->GetCurrentGameState();
         if (!sw)
@@ -824,37 +724,6 @@ void AuusaConnectPlugin::OnGameEnd()
         return;
     }
 
-    std::string playerId = cvarManager->getCvar("mm_player_id").getStringValue();
-    if (!playerId.empty() && playerId != "unknown" &&
-        !supabaseUrl.empty() && !supabaseApiKey.empty() && !supabaseJwt.empty())
-    {
-        std::thread([this, playerId]() {
-            try
-            {
-                auto headers = cpr::Header{
-                    {"Authorization", "Bearer " + supabaseJwt},
-                    {"apikey", supabaseApiKey},
-                    {"Content-Type", "application/json"}
-                };
-                auto res = cpr::Patch(
-                    cpr::Url{supabaseUrl},
-                    cpr::Parameters{{"player_id", "eq." + playerId}},
-                    cpr::Body{"{\"rl_name\":\"\",\"rl_password\":\"\",\"queue_type\":null}"},
-                    headers,
-                    cpr::VerifySsl{true});
-                if (res.status_code >= 400)
-                    Log("[Supabase] Nettoyage echoue : HTTP " + std::to_string(res.status_code) + " - " + res.text);
-            }
-            catch (const std::exception& e)
-            {
-                Log(std::string("[Supabase] Exception lors du nettoyage : ") + e.what());
-            }
-            catch (...)
-            {
-                Log("[Supabase] Exception inconnue lors du nettoyage");
-            }
-        }).detach();
-    }
 
     TeamWrapper blueTeam = sw.GetTeams().Get(0);
     TeamWrapper orangeTeam = sw.GetTeams().Get(1);

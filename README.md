@@ -11,10 +11,9 @@ Chaque dossier possède un `README.md` détaillant la mise en place.
 
 ## Configuration sécurisée
 
-Le plugin lit les secrets (`SUPABASE_URL`, `SUPABASE_API_KEY`, `SUPABASE_JWT`,
-`BOT_ENDPOINT`, `API_SECRET`) depuis des variables d'environnement ou un fichier local
-`config.json` (ignoré par Git). Un modèle `config.example.json` est disponible
-dans `plugin/`. Copiez-le puis renseignez vos valeurs ou exportez les variables
+Le plugin lit les secrets (`BOT_ENDPOINT`, `API_SECRET`) depuis des variables d'environnement
+ou un fichier local `config.json` (ignoré par Git). Un modèle `config.example.json` est
+disponible dans `plugin/`. Copiez-le puis renseignez vos valeurs ou exportez les variables
 correspondantes.
 
 ## Base de données Supabase
