@@ -186,12 +186,8 @@ private:
     std::string lastSupabaseName;
     std::string lastSupabasePassword;
     bool supabaseDisabled = false;
-<<<<<<< HEAD
-    std::string botEndpoint = "http://localhost:3000/match";
-    std::string apiSecret;
-=======
     std::string botEndpoint = "https://localhost:3000/match";
->>>>>>> origin/main
+    std::string apiSecret;
     bool creatingMatch = false;
     bool autoJoined = false;
 };
@@ -370,9 +366,11 @@ void AuusaConnectPlugin::LoadConfig()
     supabaseApiKey = getEnv("SUPABASE_API_KEY");
     supabaseJwt = getEnv("SUPABASE_JWT");
     botEndpoint = getEnv("BOT_ENDPOINT");
+    apiSecret = getEnv("API_SECRET");
 
     std::filesystem::path path = gameWrapper->GetDataFolder() / "config.json";
-    if (supabaseUrl.empty() || supabaseApiKey.empty() || supabaseJwt.empty() || botEndpoint.empty())
+    if (supabaseUrl.empty() || supabaseApiKey.empty() || supabaseJwt.empty() ||
+        botEndpoint.empty() || apiSecret.empty())
     {
         std::ifstream file(path);
         if (!file.is_open())
@@ -392,6 +390,7 @@ void AuusaConnectPlugin::LoadConfig()
                 if (supabaseApiKey.empty()) supabaseApiKey = cfg.value("SUPABASE_API_KEY", "");
                 if (supabaseJwt.empty()) supabaseJwt = cfg.value("SUPABASE_JWT", "");
                 if (botEndpoint.empty()) botEndpoint = cfg.value("BOT_ENDPOINT", "");
+                if (apiSecret.empty()) apiSecret = cfg.value("API_SECRET", "");
             }
         }
     }
@@ -406,7 +405,8 @@ void AuusaConnectPlugin::LoadConfig()
         Log("[Config] BOT_ENDPOINT doit utiliser HTTPS");
 
     Log("[Config] BOT_ENDPOINT=" + botEndpoint);
-    apiSecret = cfg.value("API_SECRET", "");
+    if (apiSecret.empty())
+        Log("[Config] API_SECRET manquant");
 }
 
 void AuusaConnectPlugin::PollSupabase()
@@ -966,15 +966,11 @@ void AuusaConnectPlugin::OnGameEnd()
                 cpr::Header headers{{"Content-Type", "application/json"}};
                 if (!apiSecret.empty())
                     headers.emplace("X-Signature", HmacSha256(apiSecret, body));
-                auto res = cpr::Post(cpr::Url{url},
-<<<<<<< HEAD
-                                     cpr::Body{body},
-                                     headers);
-=======
-                                     cpr::Body{p.dump()},
-                                     cpr::Header{{"Content-Type", "application/json"}},
-                                     cpr::VerifySsl{true});
->>>>>>> origin/main
+                auto res = cpr::Post(
+                    cpr::Url{url},
+                    cpr::Body{body},
+                    headers,
+                    cpr::VerifySsl{true});
 
                 if (res.error.code != cpr::ErrorCode::OK)
                     Log(std::string("[Stats] Erreur reseau : ") + res.error.message);

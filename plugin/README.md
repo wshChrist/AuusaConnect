@@ -13,7 +13,7 @@ Ce dossier contient le plugin Bakkesmod AuusaConnect.
 
 Copiez `config.example.json` vers un fichier `config.json` dans le dossier de données du plugin puis
 remplissez vos secrets. Vous pouvez également définir les variables d'environnement
-`SUPABASE_URL`, `SUPABASE_API_KEY`, `SUPABASE_JWT` et `BOT_ENDPOINT`.
+`SUPABASE_URL`, `SUPABASE_API_KEY`, `SUPABASE_JWT`, `BOT_ENDPOINT` et `API_SECRET`.
 
 Le fichier `config.json` étant local, il n'est pas versionné.
 
@@ -24,7 +24,8 @@ Exemple de contenu :
   "SUPABASE_URL": "https://TON_PROJECT.supabase.co/rest/v1/match_sessions",
   "SUPABASE_API_KEY": "TON_API_KEY",
   "SUPABASE_JWT": "TON_JWT",
-  "BOT_ENDPOINT": "https://localhost:3000/match"
+  "BOT_ENDPOINT": "https://localhost:3000/match",
+  "API_SECRET": "TON_API_SECRET"
 }
 ```
 

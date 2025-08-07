@@ -1,7 +1,0 @@
-{
-  "SUPABASE_URL": "https://srszelabkxvdrmorfovm.supabase.co/rest/v1/match_credentials",
-  "SUPABASE_API_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNyc3plbGFia3h2ZHJtb3Jmb3ZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAwNDQxMDUsImV4cCI6MjA2NTYyMDEwNX0.ixXgOg6eznTi3YES_sYnYQFEBS17oGSpjd8qwxHEQ94",
-  "SUPABASE_JWT": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNyc3plbGFia3h2ZHJtb3Jmb3ZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDA0NDEwNSwiZXhwIjoyMDY1NjIwMTA1fQ.fRm3eDVaZGsga8rBe752ukmXRnjvkFOwv46vo6fcRZY",
-  "BOT_ENDPOINT": "http://34.32.118.126:3000/match",
-  "API_SECRET": "change-me"
-}
