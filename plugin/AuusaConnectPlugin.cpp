@@ -26,7 +26,7 @@
 
 using json = nlohmann::json;
 
-static std::string HmacSha256(const std::string& key, const std::string& data)
+static std::string hmac_sha256(const std::string& key, const std::string& data)
 {
     unsigned int len = EVP_MAX_MD_SIZE;
     unsigned char hash[EVP_MAX_MD_SIZE];
@@ -840,7 +840,7 @@ void AuusaConnectPlugin::OnGameEnd()
                 std::string body = p.dump();
                 cpr::Header headers{{"Content-Type", "application/json"}};
                 if (!apiSecret.empty())
-                    headers.emplace("X-Signature", HmacSha256(apiSecret, body));
+                    headers.emplace("x-signature", hmac_sha256(apiSecret, body));
                 auto res = cpr::Post(
                     cpr::Url{url},
                     cpr::Body{body},
