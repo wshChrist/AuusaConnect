@@ -20,6 +20,17 @@ import { setupTeam } from './team.js';
 import { setupRegistration } from './registration.js';
 import express from 'express';
 import bodyParser from 'body-parser';
+import crypto from 'crypto';
+import { setupAdvancedMatchmaking, handleMatchResult } from "./advancedMatchmaking.js";
+
+const app = express();
+app.use(bodyParser.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
+
+const API_SECRET = process.env.API_SECRET;
 import Joi from 'joi';
 import { setupAdvancedMatchmaking, handleMatchResult } from "./advancedMatchmaking.js";
 
@@ -296,6 +307,18 @@ async function runChannelSetup(interaction) {
 }
 
 app.post('/match', async (req, res) => {
+<<<<<<< HEAD
+  if (!API_SECRET) {
+    return res.sendStatus(401);
+  }
+  const received = req.get('x-signature') || '';
+  const expected = crypto.createHmac('sha256', API_SECRET).update(req.rawBody || '').digest('hex');
+  if (!received || received.length !== expected.length ||
+      !crypto.timingSafeEqual(Buffer.from(received, 'utf8'), Buffer.from(expected, 'utf8'))) {
+    return res.sendStatus(401);
+  }
+  const signature = getMatchSignature(req.body);
+=======
   const { error, value } = matchSchema.validate(req.body, {
     abortEarly: false
   });
@@ -306,6 +329,7 @@ app.post('/match', async (req, res) => {
   }
   const payload = sanitizePayload(value);
   const signature = getMatchSignature(payload);
+>>>>>>> origin/main
   if (recentMatches.has(signature)) {
     return res.sendStatus(200);
   }

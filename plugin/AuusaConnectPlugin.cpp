@@ -16,6 +16,10 @@
 #include <memory>
 #include <exception>
 #include <ctime>
+#include <openssl/hmac.h>
+#include <openssl/evp.h>
+#include <iomanip>
+#include <sstream>
 #include <cstdlib>
 
 #undef min
@@ -64,6 +68,18 @@ static std::time_t ParseJwtExpiry(const std::string& token)
     if (j.is_discarded())
         return 0;
     return j.value("exp", 0);
+}
+
+static std::string HmacSha256(const std::string& key, const std::string& data)
+{
+    unsigned int len = EVP_MAX_MD_SIZE;
+    unsigned char hash[EVP_MAX_MD_SIZE];
+    HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()),
+         reinterpret_cast<const unsigned char*>(data.data()), data.size(), hash, &len);
+    std::ostringstream oss;
+    for (unsigned int i = 0; i < len; ++i)
+        oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
+    return oss.str();
 }
 
 struct PlayerStats
@@ -170,7 +186,12 @@ private:
     std::string lastSupabaseName;
     std::string lastSupabasePassword;
     bool supabaseDisabled = false;
+<<<<<<< HEAD
+    std::string botEndpoint = "http://localhost:3000/match";
+    std::string apiSecret;
+=======
     std::string botEndpoint = "https://localhost:3000/match";
+>>>>>>> origin/main
     bool creatingMatch = false;
     bool autoJoined = false;
 };
@@ -385,6 +406,7 @@ void AuusaConnectPlugin::LoadConfig()
         Log("[Config] BOT_ENDPOINT doit utiliser HTTPS");
 
     Log("[Config] BOT_ENDPOINT=" + botEndpoint);
+    apiSecret = cfg.value("API_SECRET", "");
 }
 
 void AuusaConnectPlugin::PollSupabase()
@@ -940,10 +962,19 @@ void AuusaConnectPlugin::OnGameEnd()
         {
             try
             {
+                std::string body = p.dump();
+                cpr::Header headers{{"Content-Type", "application/json"}};
+                if (!apiSecret.empty())
+                    headers.emplace("X-Signature", HmacSha256(apiSecret, body));
                 auto res = cpr::Post(cpr::Url{url},
+<<<<<<< HEAD
+                                     cpr::Body{body},
+                                     headers);
+=======
                                      cpr::Body{p.dump()},
                                      cpr::Header{{"Content-Type", "application/json"}},
                                      cpr::VerifySsl{true});
+>>>>>>> origin/main
 
                 if (res.error.code != cpr::ErrorCode::OK)
                     Log(std::string("[Stats] Erreur reseau : ") + res.error.message);
