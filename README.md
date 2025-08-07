@@ -1,4 +1,7 @@
 # AuusaConnect
+[![CI - Push](https://github.com/wshChrist/AuusaConnect/actions/workflows/ci.yml/badge.svg?event=push)](https://github.com/wshChrist/AuusaConnect/actions/workflows/ci.yml)
+[![CI - PR](https://github.com/wshChrist/AuusaConnect/actions/workflows/ci.yml/badge.svg?event=pull_request)](https://github.com/wshChrist/AuusaConnect/actions/workflows/ci.yml)
+
 
 Ce dépôt contient un exemple minimal permettant de relier Rocket League (via un plugin Bakkesmod) à un bot Discord pour un système de matchmaking.
 
