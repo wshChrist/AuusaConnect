@@ -1,0 +1,6 @@
+{
+  "SUPABASE_URL": "https://TON_PROJECT.supabase.co/rest/v1/match_sessions",
+  "SUPABASE_API_KEY": "VOTRE_API_KEY",
+  "SUPABASE_JWT": "VOTRE_JWT",
+  "BOT_ENDPOINT": "https://localhost:3000/match"
+}
