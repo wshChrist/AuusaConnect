@@ -77,8 +77,8 @@ const sanitizeString = str =>
   String(str || '').replace(/[^\w\sÀ-ÿ.'-]/g, '');
 
 const matchSchema = Joi.object({
-  scoreBlue: Joi.number().required(),
-  scoreOrange: Joi.number().required(),
+  scoreBlue: Joi.number().min(0).required(),
+  scoreOrange: Joi.number().min(0).required(),
   teamBlue: Joi.string().default('Bleu'),
   teamOrange: Joi.string().default('Orange'),
   scorers: Joi.array().items(Joi.string().allow('')).default([]),
@@ -87,13 +87,35 @@ const matchSchema = Joi.object({
     .items(
       Joi.object({
         name: Joi.string().required(),
-        team: Joi.number().required()
-      })
+        team: Joi.number().valid(0, 1).required(),
+        score: Joi.number().min(0).required(),
+        goals: Joi.number().min(0).required(),
+        assists: Joi.number().min(0).required(),
+        shots: Joi.number().min(0).required(),
+        saves: Joi.number().min(0).required(),
+        expectedGoals: Joi.number().min(0).default(0),
+        clearances: Joi.number().min(0).default(0),
+        defensiveChallenges: Joi.number().min(0).default(0),
+        offensiveDemos: Joi.number().min(0).default(0),
+        defensiveDemos: Joi.number().min(0).default(0),
+        clutchSaves: Joi.number().min(0).default(0),
+        cuts: Joi.number().min(0).default(0),
+        missedOpenGoals: Joi.number().min(0).default(0),
+        highPressings: Joi.number().min(0).default(0),
+        boostPickups: Joi.number().min(0).default(0),
+        wastedBoostPickups: Joi.number().min(0).default(0),
+        playstyleScore: Joi.number().default(0),
+        auusaNote: Joi.string().allow('').default('')
+      }).unknown(false)
     )
     .min(1)
     .required(),
   duration: Joi.string().default('5:00'),
   map: Joi.string().allow('').default('')
+});
+
+const playerSchema = Joi.object({
+  player_id: Joi.string().required()
 });
 
 function sanitizePayload(payload) {
@@ -484,6 +506,16 @@ app.post('/match', async (req, res) => {
     await handleMatchResult(payload, client);
   }
   res.sendStatus(200);
+});
+
+app.get('/player', (req, res) => {
+  const { error } = playerSchema.validate(req.query, { abortEarly: false });
+  if (error) {
+    return res.status(400).json({
+      error: error.details.map(d => d.message)
+    });
+  }
+  res.json({});
 });
 
 client.once('ready', async () => {
