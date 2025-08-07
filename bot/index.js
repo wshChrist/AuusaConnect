@@ -14,14 +14,18 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import express from 'express';
+import bodyParser from 'body-parser';
+import crypto from 'crypto';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import cors from 'cors';
+import Joi from 'joi';
 import { setupMatchmaking } from './matchmaking.js';
 import { setupVerification, runVerificationSetup } from './verification.js';
 import { setupTeam } from './team.js';
 import { setupRegistration } from './registration.js';
-import express from 'express';
-import bodyParser from 'body-parser';
-import crypto from 'crypto';
-import { setupAdvancedMatchmaking, handleMatchResult } from "./advancedMatchmaking.js";
+import { setupAdvancedMatchmaking, handleMatchResult } from './advancedMatchmaking.js';
 
 const app = express();
 app.use(bodyParser.json({
@@ -29,12 +33,6 @@ app.use(bodyParser.json({
     req.rawBody = buf;
   }
 }));
-
-const API_SECRET = process.env.API_SECRET;
-import Joi from 'joi';
-import { setupAdvancedMatchmaking, handleMatchResult } from "./advancedMatchmaking.js";
-
-const app = express();
 app.use(helmet());
 
 const limiter = rateLimit({
@@ -50,7 +48,7 @@ if (allowedOrigins.length > 0) {
   app.use(cors({ origin: allowedOrigins }));
 }
 
-app.use(bodyParser.json());
+const API_SECRET = process.env.API_SECRET;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CHANNEL_FILE = path.join(__dirname, 'channel.json');
@@ -307,18 +305,25 @@ async function runChannelSetup(interaction) {
 }
 
 app.post('/match', async (req, res) => {
-<<<<<<< HEAD
   if (!API_SECRET) {
     return res.sendStatus(401);
   }
   const received = req.get('x-signature') || '';
-  const expected = crypto.createHmac('sha256', API_SECRET).update(req.rawBody || '').digest('hex');
-  if (!received || received.length !== expected.length ||
-      !crypto.timingSafeEqual(Buffer.from(received, 'utf8'), Buffer.from(expected, 'utf8'))) {
+  const expected = crypto
+    .createHmac('sha256', API_SECRET)
+    .update(req.rawBody || '')
+    .digest('hex');
+  if (
+    !received ||
+    received.length !== expected.length ||
+    !crypto.timingSafeEqual(
+      Buffer.from(received, 'utf8'),
+      Buffer.from(expected, 'utf8')
+    )
+  ) {
     return res.sendStatus(401);
   }
-  const signature = getMatchSignature(req.body);
-=======
+
   const { error, value } = matchSchema.validate(req.body, {
     abortEarly: false
   });
@@ -329,7 +334,6 @@ app.post('/match', async (req, res) => {
   }
   const payload = sanitizePayload(value);
   const signature = getMatchSignature(payload);
->>>>>>> origin/main
   if (recentMatches.has(signature)) {
     return res.sendStatus(200);
   }
