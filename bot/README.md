@@ -42,6 +42,18 @@ CORS_ORIGIN=https://exemple.com
 node index.js
 ```
 
+### HTTPS
+
+Si `SSL_KEY_PATH` et `SSL_CERT_PATH` sont définis, le bot démarre en HTTPS.
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 365
+SSL_KEY_PATH=./key.pem SSL_CERT_PATH=./cert.pem node index.js
+```
+
+En production, utilisez un certificat Let's Encrypt ou placez le bot derrière
+un reverse proxy (Nginx, Caddy).
+
 Au premier lancement, le bot enregistre automatiquement la commande slash
 `/setup`. Celle-ci comporte plusieurs sous-commandes :
 
