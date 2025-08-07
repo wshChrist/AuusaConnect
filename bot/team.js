@@ -856,6 +856,17 @@ export function setupTeam(client) {
           const rows = await sbRequest('GET', 'teams', { query: `name=eq.${encodeURIComponent(name)}` });
           if (!rows.length) return interaction.reply({ content: 'Équipe introuvable.', ephemeral: true });
           await sbRequest('POST', 'team_members', { body: { user_id: interaction.user.id, team_id: rows[0].id } }).catch(() => {});
+          let guild = interaction.guild;
+          if (!guild) {
+            guild = interaction.client.guilds.cache.find(g => g.roles.cache.some(r => r.name === rows[0].name));
+          }
+          if (guild) {
+            const role = guild.roles.cache.find(r => r.name === rows[0].name);
+            const member =
+              guild.members.cache.get(interaction.user.id) ||
+              (await guild.members.fetch(interaction.user.id).catch(() => null));
+            if (role && member) await member.roles.add(role).catch(() => {});
+          }
           await interaction.reply({ content: `Rejoint **${rows[0].name}** !`, ephemeral: true });
         } else if (interaction.customId === 'team_add_roster_modal') {
           const name = interaction.fields.getTextInputValue('name');
