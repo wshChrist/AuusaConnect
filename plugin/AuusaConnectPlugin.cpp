@@ -437,6 +437,11 @@ void AuusaConnectPlugin::PollSupabase()
                 cpr::Url{"https://api.auusa.fr/player"},
                 cpr::Parameters{{"player_id", playerId}},
                 cpr::VerifySsl{true});
+            if (r.error.code != cpr::ErrorCode::OK)
+            {
+                Log(std::string("[API] Erreur reseau : ") + r.error.message);
+                return;
+            }
             if (r.status_code != 200)
             {
                 Log("[API] Erreur HTTP " + std::to_string(r.status_code) + ": " + r.text);
