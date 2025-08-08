@@ -3,6 +3,7 @@
 #include "bakkesmod/wrappers/WrapperStructs.h"
 #include "bakkesmod/wrappers/MatchmakingWrapper.h"
 #include <cpr/cpr.h>
+#include <curl/curl.h>
 #include <nlohmann/json.hpp>
 #include <vector>
 #include <string>
@@ -882,21 +883,57 @@ void AuusaConnectPlugin::OnGameEnd()
             try
             {
                 std::string body = p.dump();
-                cpr::Header headers{{"Content-Type", "application/json"}};
+                struct curl_slist* headers_list = nullptr;
+                headers_list = curl_slist_append(headers_list, "Content-Type: application/json");
                 if (!apiSecret.empty())
-                    headers.emplace("x-signature", hmac_sha256(apiSecret, body));
-                auto res = cpr::Post(
-                    cpr::Url{url},
-                    cpr::Body{body},
-                    headers,
-                    cpr::VerifySsl{false});
+                {
+                    std::string signature = hmac_sha256(apiSecret, body);
+                    std::string sig_header = "x-signature: " + signature;
+                    headers_list = curl_slist_append(headers_list, sig_header.c_str());
+                }
 
-                if (res.error.code != cpr::ErrorCode::OK)
-                    Log(std::string("[Stats] Erreur reseau : ") + res.error.message);
-                else if (res.status_code >= 200 && res.status_code < 300)
-                    Log("[Stats] Envoi reussi");
-                else
-                    Log("[Stats] Erreur HTTP " + std::to_string(res.status_code) + ": " + res.text);
+                CURL* curl = curl_easy_init();
+                if (curl)
+                {
+                    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+                    if (url.rfind("http://", 0) == 0)
+                    {
+                        curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_NONE);
+                    }
+                    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+                    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers_list);
+                    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+                    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
+                    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+                    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+
+                    std::string response;
+                    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
+                                     +[](char* ptr, size_t size, size_t nmemb, void* userdata) -> size_t {
+                                         auto* resp = static_cast<std::string*>(userdata);
+                                         resp->append(ptr, size * nmemb);
+                                         return size * nmemb;
+                                     });
+                    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+
+                    CURLcode res = curl_easy_perform(curl);
+                    if (res != CURLE_OK)
+                    {
+                        Log(std::string("[Stats] Erreur reseau : ") + curl_easy_strerror(res));
+                    }
+                    else
+                    {
+                        long status_code = 0;
+                        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status_code);
+                        if (status_code >= 200 && status_code < 300)
+                            Log("[Stats] Envoi reussi");
+                        else
+                            Log("[Stats] Erreur HTTP " + std::to_string(status_code) + ": " + response);
+                    }
+
+                    curl_easy_cleanup(curl);
+                }
+                curl_slist_free_all(headers_list);
             }
             catch (const std::exception& e)
             {
