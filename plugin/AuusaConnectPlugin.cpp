@@ -386,8 +386,8 @@ void AuusaConnectPlugin::LoadConfig()
 
     if (botEndpoint.empty())
         botEndpoint = std::string(DEFAULT_API_BASE) + "/match";
-    if (botEndpoint.rfind("https://", 0) != 0)
-        Log("[Config] BOT_ENDPOINT doit utiliser HTTPS");
+    if (botEndpoint.rfind("https://", 0) != 0 && botEndpoint.rfind("http://", 0) != 0)
+        Log("[Config] BOT_ENDPOINT doit utiliser HTTP ou HTTPS");
 
     Log("[Config] BOT_ENDPOINT=" + botEndpoint);
     if (apiSecret.empty())
