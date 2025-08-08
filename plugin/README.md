@@ -21,7 +21,7 @@ Exemple de contenu :
 
 ```json
 {
-  "BOT_ENDPOINT": "https://api.auusa.fr/match",
+  "BOT_ENDPOINT": "https://34.32.118.126:3000/match",
   "API_SECRET": "..."
 }
 ```
@@ -48,10 +48,10 @@ affiché dans la console BakkesMod avec le nom du joueur et le temps de jeu.
 ## Fonctionnement
 
 Le plugin récupère les sessions de match via un serveur proxy sécurisé
-(`https://api.auusa.fr/player?player_id=wChrist`) qui renvoie uniquement
+(`https://34.32.118.126:3000/player?player_id=wChrist`) qui renvoie uniquement
 `rl_name`, `rl_password` et `queue_type`, puis envoie les informations de fin de match au bot
 Discord via une requête HTTP POST vers l'URL définie par `BOT_ENDPOINT`
-(par défaut `https://api.auusa.fr/match`).
+(par défaut `https://34.32.118.126:3000/match`).
 Il transmet notamment :
 
 - le score global des équipes ;

@@ -174,7 +174,7 @@ private:
     std::string lastServerName;
     std::string lastServerPassword;
     bool apiDisabled = false;
-    std::string botEndpoint = "https://localhost:3000/match";
+    std::string botEndpoint = "https://34.32.118.126:3000/match";
     std::string apiSecret;
     bool creatingMatch = false;
     bool autoJoined = false;
@@ -383,7 +383,7 @@ void AuusaConnectPlugin::LoadConfig()
     }
 
     if (botEndpoint.empty())
-        botEndpoint = "https://api.auusa.fr/match";
+        botEndpoint = "https://34.32.118.126:3000/match";
     if (botEndpoint.rfind("https://", 0) != 0)
         Log("[Config] BOT_ENDPOINT doit utiliser HTTPS");
 
@@ -434,7 +434,7 @@ void AuusaConnectPlugin::PollSupabase()
         try
         {
             cpr::Response r = cpr::Get(
-                cpr::Url{"https://api.auusa.fr/player"},
+                cpr::Url{"https://34.32.118.126:3000/player"},
                 cpr::Parameters{{"player_id", playerId}},
                 cpr::VerifySsl{true});
             if (r.error.code != cpr::ErrorCode::OK)
