@@ -898,7 +898,7 @@ void AuusaConnectPlugin::OnGameEnd()
                     curl_easy_setopt(curl, CURLOPT_URL, botEndpoint.c_str());
                     if (botEndpoint.rfind("http://", 0) == 0) {
                     curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_NONE);
-                    LOG("Mode HTTP détecté : SSL/TLS désactivé pour cette requête");
+                    Log("Mode HTTP détecté : SSL/TLS désactivé pour cette requête");
                     }
 
                     curl_easy_setopt(curl, CURLOPT_POST, 1L);
