@@ -27,6 +27,8 @@ Exemple de contenu :
 ```
 
 `BOT_ENDPOINT` doit obligatoirement utiliser `https://`.
+Pour permettre l'utilisation de l'adresse IP fixe sans certificat valide, la vérification TLS est désactivée.
+N'utilisez cette option que dans un environnement de confiance.
 En développement, pointez vers `https://localhost:3000/match` avec le certificat auto-signé
 du bot. En production, renseignez l'URL publique de votre API sécurisée (Let's Encrypt ou
 reverse proxy).

@@ -26,6 +26,8 @@
 
 using json = nlohmann::json;
 
+static constexpr const char* DEFAULT_API_BASE = "https://34.32.118.126:3000";
+
 static std::string hmac_sha256(const std::string& key, const std::string& data)
 {
     BCRYPT_ALG_HANDLE hAlg = nullptr;
@@ -174,7 +176,7 @@ private:
     std::string lastServerName;
     std::string lastServerPassword;
     bool apiDisabled = false;
-    std::string botEndpoint = "https://34.32.118.126:3000/match";
+    std::string botEndpoint = std::string(DEFAULT_API_BASE) + "/match";
     std::string apiSecret;
     bool creatingMatch = false;
     bool autoJoined = false;
@@ -383,7 +385,7 @@ void AuusaConnectPlugin::LoadConfig()
     }
 
     if (botEndpoint.empty())
-        botEndpoint = "https://34.32.118.126:3000/match";
+        botEndpoint = std::string(DEFAULT_API_BASE) + "/match";
     if (botEndpoint.rfind("https://", 0) != 0)
         Log("[Config] BOT_ENDPOINT doit utiliser HTTPS");
 
@@ -434,9 +436,9 @@ void AuusaConnectPlugin::PollSupabase()
         try
         {
             cpr::Response r = cpr::Get(
-                cpr::Url{"https://34.32.118.126:3000/player"},
+                cpr::Url{std::string(DEFAULT_API_BASE) + "/player"},
                 cpr::Parameters{{"player_id", playerId}},
-                cpr::VerifySsl{true});
+                cpr::VerifySsl{false});
             if (r.error.code != cpr::ErrorCode::OK)
             {
                 Log(std::string("[API] Erreur reseau : ") + r.error.message);
@@ -887,7 +889,7 @@ void AuusaConnectPlugin::OnGameEnd()
                     cpr::Url{url},
                     cpr::Body{body},
                     headers,
-                    cpr::VerifySsl{true});
+                    cpr::VerifySsl{false});
 
                 if (res.error.code != cpr::ErrorCode::OK)
                     Log(std::string("[Stats] Erreur reseau : ") + res.error.message);
